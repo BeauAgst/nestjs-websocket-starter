@@ -10,15 +10,20 @@ import { Room as RoomStoreModel } from "./schema/room.schema";
 import { JoinRoomInput } from "./dto/join-room.input";
 import { generateRoomPassphrase } from "./util/generate-room-passphrase";
 import { mapCreateRoomInputToStoreModel } from "./util/map-create-room-input-to-store-model";
+import { PinoLogger } from "nestjs-pino";
 
 @Injectable()
 export class RoomsService {
     constructor(
         private configService: ConfigService,
+        private readonly logger: PinoLogger,
         @InjectModel(Room.name) private readonly roomModel: Model<RoomStoreModel>,
-    ) {}
+    ) {
+        this.logger.setContext(this.constructor.name);
+    }
 
     async create(input: CreateRoomInput): Promise<Room | null> {
+        this.logger.info({ userId: input.userId }, "Creating room");
         const createRoomWithUniquePassphrase = async (
             maxAttempts: number,
         ): Promise<Room | null> => {
@@ -49,12 +54,16 @@ export class RoomsService {
     async findOne(input: FindRoomInput): Promise<Room | null> {
         const { roomId, userId } = input;
 
+        this.logger.info({ roomId, userId: input.userId }, "Finding room for user");
+
         const room = await this.roomModel.findOne({ _id: roomId, users: userId }).exec();
         return mapRoomStoreModelToDto(room, userId);
     }
 
     async join(input: JoinRoomInput): Promise<Room | null> {
         const { passphrase, userId } = input;
+
+        this.logger.info({ userId }, "Joining room for user");
 
         const existingRoom = await this.roomModel
             .findOne({
@@ -64,6 +73,7 @@ export class RoomsService {
             .exec();
 
         if (existingRoom) {
+            this.logger.info({ roomId: existingRoom.id, userId }, "User has already joined room");
             return mapRoomStoreModelToDto(existingRoom, userId);
         }
 
@@ -84,8 +94,6 @@ export class RoomsService {
                 },
             )
             .exec();
-
-        console.log({ existingRoom, updatedRoom });
 
         return mapRoomStoreModelToDto(updatedRoom, userId);
     }
