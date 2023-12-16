@@ -1,14 +1,13 @@
-import { Field, InputType } from "@nestjs/graphql";
-import { IsString, Length } from "class-validator";
+import { IsString, Length, ValidateNested } from "class-validator";
+import { User } from "../../model/user.model";
+import { Type } from "class-transformer";
 
-@InputType()
 export class JoinRoomInput {
-    @Field({ description: "The passphrase to enter the room" })
     @Length(4, 4)
     @IsString()
     passphrase: string;
 
-    @Field({ description: "The user ID" })
-    @IsString()
-    userId: string;
+    @ValidateNested()
+    @Type(() => User)
+    user: User;
 }

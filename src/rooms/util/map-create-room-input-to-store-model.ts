@@ -1,5 +1,6 @@
 import { CreateRoomInput } from "../dto/create-room.input";
-import { Room } from "../schema/room.schema";
+import { v4 as uuid } from "uuid";
+import { Room } from "../../model/room.model";
 
 export const mapCreateRoomInputToStoreModel = (
     input: CreateRoomInput,
@@ -9,10 +10,11 @@ export const mapCreateRoomInputToStoreModel = (
 
     return {
         createdAt,
+        host: input.user,
+        id: uuid(),
         maxUsers: input.maxUsers ?? null,
         passphrase,
-        roomOwnerId: input.userId,
-        users: [input.userId],
         updatedAt: createdAt,
+        users: [],
     };
 };

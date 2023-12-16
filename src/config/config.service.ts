@@ -5,10 +5,6 @@ import { ConfigService as NestConfigService } from "@nestjs/config";
 export class ConfigService {
     constructor(private config: NestConfigService) {}
 
-    get roomCreationRetryAttempts() {
-        return this.config.get<number>("ROOM_CREATION_MAX_RETRY_ATTEMPTS");
-    }
-
     get roomPassphraseAlphabet() {
         return this.config.get<string>("ROOM_PASSPHRASE_ALPHABET");
     }

@@ -1,15 +1,15 @@
-import { Field, InputType } from "@nestjs/graphql";
-import { IsNumber, IsOptional, IsString, Max } from "class-validator";
+import { IsNumber, IsOptional, Max, Min, ValidateNested } from "class-validator";
+import { Type } from "class-transformer";
+import { User } from "../../model/user.model";
 
-@InputType()
 export class CreateRoomInput {
-    @Field({ description: "The maximum number of users allowed to join the room", nullable: true })
     @IsOptional()
     @Max(20)
+    @Min(0)
     @IsNumber()
     maxUsers?: number;
 
-    @Field({ description: "The user ID" })
-    @IsString()
-    userId: string;
+    @ValidateNested()
+    @Type(() => User)
+    user: User;
 }
