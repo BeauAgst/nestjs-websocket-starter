@@ -1,13 +1,13 @@
 import { Field, InputType } from "@nestjs/graphql";
-import { IsMongoId, IsString } from "class-validator";
+import { IsMongoId } from "class-validator";
 
 @InputType()
 export class FindRoomInput {
-    @Field()
+    @Field({ description: "The ID of the room" })
     @IsMongoId()
     roomId: string;
 
-    @Field()
-    @IsString()
-    roomOwnerId: string;
+    @Field({ description: "The user ID" })
+    @IsMongoId()
+    userId: string;
 }
