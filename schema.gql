@@ -1,0 +1,37 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+directive @upper on FIELD_DEFINITION
+
+"""
+Contains information about a websocket "room"
+"""
+type Room {
+  """The room ID"""
+  id: Int!
+
+  """The maximum number of uses allowed in the room concurrently"""
+  maxUsers: Int!
+
+  """The passphrase required to enter the room"""
+  passphrase: String!
+}
+
+type Query {
+  room(input: FindRoomInput!): Room!
+}
+
+input FindRoomInput {
+  roomId: String!
+  roomOwnerId: String!
+}
+
+type Mutation {
+  createRoom(input: CreateRoomInput!): Room!
+}
+
+input CreateRoomInput {
+  roomOwnerId: String!
+  maxUsers: Float
+}
