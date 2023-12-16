@@ -1,5 +1,5 @@
 import { Field, InputType } from "@nestjs/graphql";
-import { IsMongoId, IsNumber, IsOptional, Max } from "class-validator";
+import { IsNumber, IsOptional, IsString, Max } from "class-validator";
 
 @InputType()
 export class CreateRoomInput {
@@ -10,6 +10,6 @@ export class CreateRoomInput {
     maxUsers?: number;
 
     @Field({ description: "The user ID" })
-    @IsMongoId()
+    @IsString()
     userId: string;
 }

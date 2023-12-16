@@ -1,5 +1,5 @@
 import { Field, InputType } from "@nestjs/graphql";
-import { IsMongoId } from "class-validator";
+import { IsMongoId, IsString } from "class-validator";
 
 @InputType()
 export class FindRoomInput {
@@ -8,6 +8,6 @@ export class FindRoomInput {
     roomId: string;
 
     @Field({ description: "The user ID" })
-    @IsMongoId()
+    @IsString()
     userId: string;
 }
