@@ -99,9 +99,7 @@ export class EventsGateway implements OnGatewayDisconnect {
     ) {
         const room = this.roomsService.toggleRoomLockedState(input);
 
-        const event = room.isLocked ? "ROOM_LOCKED" : "ROOM_UNLOCKED";
-
-        await client.broadcast.to(room.id).emit(event, JSON.stringify(room));
+        await client.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
 
         return room;
     }

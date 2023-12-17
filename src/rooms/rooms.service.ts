@@ -23,8 +23,7 @@ export class RoomsService {
     }
 
     isRoomFull(room: Room) {
-        const totalUsersIncludingHost = room.users.length + 1;
-        return room.maxUsers && room.maxUsers === totalUsersIncludingHost;
+        return room.maxUsers && room.maxUsers <= room.users.length;
     }
 
     isRoomLocked(room: Room) {
