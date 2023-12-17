@@ -1,6 +1,7 @@
 import {
     ConnectedSocket,
     MessageBody,
+    OnGatewayDisconnect,
     SubscribeMessage,
     WebSocketGateway,
     WebSocketServer,
@@ -21,7 +22,7 @@ import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
     },
     namespace: "rooms",
 })
-export class EventsGateway {
+export class EventsGateway implements OnGatewayDisconnect {
     @WebSocketServer()
     server: Server;
 
@@ -34,32 +35,65 @@ export class EventsGateway {
 
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("create_room")
-    handleCreateRoomMessage(
+    async handleCreateRoomMessage(
         @ConnectedSocket()
         client: Socket,
         @MessageBody()
         input: CreateRoomInput,
     ) {
-        return this.roomsService.createRoom(input, client);
+        const room = this.roomsService.createRoom(input);
+
+        await client.join(room.id);
+        await this.server.to(room.id).emit("ROOM_CREATED", JSON.stringify(room));
+
+        return room;
     }
 
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("join_room")
-    handleJoinRoomMessage(
+    async handleJoinRoomMessage(
         @ConnectedSocket()
         client: Socket,
         @MessageBody()
         input: JoinRoomInput,
     ) {
-        return this.roomsService.joinRoom(input, client);
+        const room = this.roomsService.joinRoom(input);
+
+        await client.join(room.id);
+        await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+
+        return room;
     }
 
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("leave_room")
-    handleLeaveRoomMessage(
+    async handleLeaveRoomMessage(
         @MessageBody()
         input: LeaveRoomInput,
     ) {
-        return this.roomsService.leaveRoom(input);
+        const { isHost, room, success } = await this.roomsService.leaveRoomWithSocketId(
+            input.user.socketId,
+        );
+
+        if (!success) return;
+
+        if (isHost) {
+            this.server.in(room.id).socketsLeave(room.id);
+        } else {
+            await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        }
+    }
+
+    async handleDisconnect(socket: Socket): Promise<void> {
+        this.logger.info({ socketId: socket.id }, "Socket disconnected");
+        const { isHost, room, success } = await this.roomsService.leaveRoomWithSocketId(socket.id);
+
+        if (!success) return;
+
+        if (isHost) {
+            this.server.in(room.id).socketsLeave(room.id);
+        } else {
+            await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        }
     }
 }
