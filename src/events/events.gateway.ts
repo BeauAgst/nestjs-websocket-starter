@@ -68,6 +68,8 @@ export class EventsGateway implements OnGatewayDisconnect {
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("LEAVE_ROOM")
     async handleLeaveRoomMessage(
+        @ConnectedSocket()
+        client: Socket,
         @MessageBody()
         input: LeaveRoomInput,
     ) {
@@ -75,18 +77,23 @@ export class EventsGateway implements OnGatewayDisconnect {
             input.user.socketId,
         );
 
-        if (!success) return;
+        if (!success) return { success: false };
 
         if (isHost) {
             this.server.in(room.id).socketsLeave(room.id);
         } else {
+            await client.leave(room.id);
             await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
         }
+
+        return { success: true };
     }
 
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("TOGGLE_ROOM_LOCKED_STATE")
     async handleLockRoomMessage(
+        @ConnectedSocket()
+        client: Socket,
         @MessageBody()
         input: ToggleLockRoomInput,
     ) {
@@ -94,7 +101,9 @@ export class EventsGateway implements OnGatewayDisconnect {
 
         const event = room.isLocked ? "ROOM_LOCKED" : "ROOM_UNLOCKED";
 
-        await this.server.to(room.id).emit(event, JSON.stringify(room));
+        await client.broadcast.to(room.id).emit(event, JSON.stringify(room));
+
+        return room;
     }
 
     async handleDisconnect(socket: Socket): Promise<void> {

@@ -133,9 +133,9 @@ export class RoomsService {
             return { isHost: undefined, room, success: false };
         }
 
-        const foundUser = this.findUserInRoom(room, socketId);
+        const userPerformingAction = this.findUserInRoom(room, socketId);
 
-        if (foundUser.isHost) {
+        if (userPerformingAction.isHost) {
             this.logger.info({ roomId, userId }, "User is host of room, deleting room");
             this.rooms.delete(roomId);
             return { isHost: true, room, success: true };
@@ -143,7 +143,7 @@ export class RoomsService {
 
         this.logger.info({ roomId, userId }, "Removing user from room");
 
-        const updatedRoom = {
+        const updatedRoom: Room = {
             ...room,
             users: room.users.filter((user) => user.socketId !== socketId),
             updatedAt: new Date(),
@@ -176,9 +176,9 @@ export class RoomsService {
             throw new NotFoundException(message);
         }
 
-        const foundUser = this.findUserInRoom(room, socketId);
+        const userPerformingAction = this.findUserInRoom(room, socketId);
 
-        if (!foundUser.isHost) {
+        if (!userPerformingAction.isHost) {
             const message = "User is not host and cannot toggle room locked state";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
