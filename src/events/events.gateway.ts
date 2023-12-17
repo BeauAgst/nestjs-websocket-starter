@@ -38,13 +38,13 @@ export class EventsGateway implements OnGatewayDisconnect {
     @SubscribeMessage("CREATE_ROOM")
     async handleCreateRoomMessage(
         @ConnectedSocket()
-        client: Socket,
+        socket: Socket,
         @MessageBody()
         input: CreateRoomInput,
     ) {
         const room = this.roomsService.createRoom(input);
 
-        await client.join(room.id);
+        await socket.join(room.id);
 
         return room;
     }
@@ -53,14 +53,14 @@ export class EventsGateway implements OnGatewayDisconnect {
     @SubscribeMessage("JOIN_ROOM")
     async handleJoinRoomMessage(
         @ConnectedSocket()
-        client: Socket,
+        socket: Socket,
         @MessageBody()
         input: JoinRoomInput,
     ) {
         const room = this.roomsService.joinRoom(input);
 
-        await client.join(room.id);
-        await client.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        await socket.join(room.id);
+        await socket.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
 
         return room;
     }
@@ -69,7 +69,7 @@ export class EventsGateway implements OnGatewayDisconnect {
     @SubscribeMessage("LEAVE_ROOM")
     async handleLeaveRoomMessage(
         @ConnectedSocket()
-        client: Socket,
+        socket: Socket,
         @MessageBody()
         input: LeaveRoomInput,
     ) {
@@ -82,7 +82,7 @@ export class EventsGateway implements OnGatewayDisconnect {
         if (isHost) {
             this.server.in(room.id).socketsLeave(room.id);
         } else {
-            await client.leave(room.id);
+            await socket.leave(room.id);
             await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
         }
 
@@ -93,13 +93,13 @@ export class EventsGateway implements OnGatewayDisconnect {
     @SubscribeMessage("TOGGLE_ROOM_LOCKED_STATE")
     async handleLockRoomMessage(
         @ConnectedSocket()
-        client: Socket,
+        socket: Socket,
         @MessageBody()
         input: ToggleLockRoomInput,
     ) {
         const room = this.roomsService.toggleRoomLockedState(input);
 
-        await client.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        await socket.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
 
         return room;
     }
@@ -111,6 +111,7 @@ export class EventsGateway implements OnGatewayDisconnect {
         if (!success) return;
 
         if (isHost) {
+            await socket.broadcast.to(room.id).emit("ROOM_CLOSED", JSON.stringify(room));
             this.server.in(room.id).socketsLeave(room.id);
         } else {
             await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
