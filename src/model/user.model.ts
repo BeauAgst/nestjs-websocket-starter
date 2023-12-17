@@ -1,8 +1,8 @@
-import { IsNotEmpty, IsString, MinLength } from "class-validator";
+import { IsNotEmpty, IsString, IsUUID, MinLength } from "class-validator";
 
 export class User {
     @IsNotEmpty()
-    @IsString()
+    @IsUUID()
     id: string;
 
     @MinLength(2)
