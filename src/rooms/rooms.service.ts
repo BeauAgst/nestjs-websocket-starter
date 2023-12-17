@@ -31,15 +31,8 @@ export class RoomsService {
         return room.isLocked;
     }
 
-    isUserMemberOfRoom(room: Room, userId: string) {
-        const isUserRoomHost = this.isUserRoomHost(room, userId);
-        const isUserMemberOfRoom = room.users.find((user) => user.id === userId);
-
-        return isUserRoomHost || Boolean(isUserMemberOfRoom);
-    }
-
-    isUserRoomHost(room: Room, userId: string) {
-        return room.host.id === userId;
+    findUserInRoom(room: Room, socketId: string) {
+        return room.users.find((user) => user.socketId === socketId);
     }
 
     createRoom(input: CreateRoomInput): Room | null {
@@ -90,7 +83,7 @@ export class RoomsService {
     }
 
     joinRoom({ roomId, user }: JoinRoomInput): Room | null {
-        const { id: userId } = user;
+        const { id: userId, socketId } = user;
 
         this.logger.info({ roomId, userId }, "Joining room for user");
 
@@ -102,7 +95,7 @@ export class RoomsService {
             throw new NotFoundException(message);
         }
 
-        if (this.isUserMemberOfRoom(room, userId)) {
+        if (this.findUserInRoom(room, socketId)) {
             this.logger.info({ roomId, userId }, "User is already a member of this room");
             return room;
         }
@@ -121,7 +114,7 @@ export class RoomsService {
 
         const updatedRoom: Room = {
             ...room,
-            users: [...room.users, mapUserToStoreModel(user)],
+            users: [...room.users, mapUserToStoreModel(user, false)],
         };
 
         this.rooms.set(roomId, updatedRoom);
@@ -130,27 +123,29 @@ export class RoomsService {
     }
 
     leaveRoom({ roomId, user }: LeaveRoomInput) {
-        const { id: userId } = user;
+        const { id: userId, socketId } = user;
 
-        const existingRoom = this.rooms.get(roomId);
+        const room = this.rooms.get(roomId);
 
-        if (!existingRoom) {
+        if (!room) {
             const message = "Room does not exist";
             this.logger.info({ roomId, userId }, message);
-            return { isHost: undefined, room: existingRoom, success: false };
+            return { isHost: undefined, room, success: false };
         }
 
-        if (existingRoom.host.id === userId) {
+        const foundUser = this.findUserInRoom(room, socketId);
+
+        if (foundUser.isHost) {
             this.logger.info({ roomId, userId }, "User is host of room, deleting room");
             this.rooms.delete(roomId);
-            return { isHost: true, room: existingRoom, success: true };
+            return { isHost: true, room, success: true };
         }
 
         this.logger.info({ roomId, userId }, "Removing user from room");
 
         const updatedRoom = {
-            ...existingRoom,
-            users: existingRoom.users.filter((user) => user.id !== userId),
+            ...room,
+            users: room.users.filter((user) => user.socketId !== socketId),
             updatedAt: new Date(),
         };
 
@@ -161,26 +156,18 @@ export class RoomsService {
 
     leaveRoomWithSocketId(socketId: string) {
         for (const room of this.rooms.values()) {
-            const isHost = room.host.socketId === socketId;
+            const user = this.findUserInRoom(room, socketId);
 
-            if (isHost) {
-                const result = this.leaveRoom({ roomId: room.id, user: room.host });
-                return { isHost: true, room: result.room, success: result.success };
+            if (!user) {
+                return { isHost: null, room: null, success: false };
             }
 
-            const matchingUser = room.users.find((user) => user.socketId === socketId);
-
-            if (matchingUser) {
-                const result = this.leaveRoom({ roomId: room.id, user: matchingUser });
-                return { isHost: false, room: result.room, success: result.success };
-            }
+            return this.leaveRoom({ roomId: room.id, user });
         }
-
-        return { isHost: null, room: null, success: false };
     }
 
     toggleRoomLockedState({ roomId, user }: ToggleLockRoomInput) {
-        const userId = user.id;
+        const { id: userId, socketId } = user;
         const room = this.rooms.get(roomId);
 
         if (!room) {
@@ -189,9 +176,9 @@ export class RoomsService {
             throw new NotFoundException(message);
         }
 
-        const isRoomHost = this.isUserRoomHost(room, userId);
+        const foundUser = this.findUserInRoom(room, socketId);
 
-        if (!isRoomHost) {
+        if (!foundUser.isHost) {
             const message = "User is not host and cannot toggle room locked state";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
