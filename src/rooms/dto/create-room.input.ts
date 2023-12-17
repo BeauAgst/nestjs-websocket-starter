@@ -1,6 +1,6 @@
 import { IsBoolean, IsNumber, IsOptional, Max, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
-import { User } from "../../model/user.model";
+import { UserInput } from "./user.input";
 
 export class CreateRoomInput {
     @IsOptional()
@@ -14,6 +14,6 @@ export class CreateRoomInput {
     maxUsers?: number;
 
     @ValidateNested()
-    @Type(() => User)
-    user: User;
+    @Type(() => UserInput)
+    user: UserInput;
 }

@@ -158,12 +158,12 @@ export class RoomsService {
         for (const room of this.rooms.values()) {
             const user = this.findUserInRoom(room, socketId);
 
-            if (!user) {
-                return { isHost: null, room: null, success: false };
+            if (user) {
+                return this.leaveRoom({ roomId: room.id, user });
             }
-
-            return this.leaveRoom({ roomId: room.id, user });
         }
+
+        return { isHost: null, room: null, success: false };
     }
 
     toggleRoomLockedState({ roomId, user }: ToggleLockRoomInput) {

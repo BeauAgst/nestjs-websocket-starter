@@ -1,6 +1,6 @@
 import { IsAlphanumeric, IsString, IsUppercase, Length, ValidateNested } from "class-validator";
-import { User } from "../../model/user.model";
 import { Type } from "class-transformer";
+import { UserInput } from "./user.input";
 
 export class JoinRoomInput {
     @Length(4, 4)
@@ -10,6 +10,6 @@ export class JoinRoomInput {
     roomId: string;
 
     @ValidateNested()
-    @Type(() => User)
-    user: User;
+    @Type(() => UserInput)
+    user: UserInput;
 }
