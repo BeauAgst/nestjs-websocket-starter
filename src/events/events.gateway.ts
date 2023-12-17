@@ -16,10 +16,10 @@ import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
 
 @UseFilters(BadRequestTransformationFilter)
 @WebSocketGateway({
-    namespace: "rooms",
     cors: {
         origin: "*",
     },
+    namespace: "rooms",
 })
 export class EventsGateway {
     @WebSocketServer()
