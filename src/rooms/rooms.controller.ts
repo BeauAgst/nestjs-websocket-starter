@@ -7,7 +7,7 @@ export class RoomsController {
     constructor(private readonly roomsService: RoomsService) {}
 
     @Get(":id")
-    room(@Param("id") id: string): SuccessModel {
+    getRoom(@Param("id") id: string): SuccessModel {
         const result = this.roomsService.findRoom(id);
 
         if (!result.success) {
