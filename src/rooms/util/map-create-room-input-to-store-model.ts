@@ -12,6 +12,7 @@ export const mapCreateRoomInputToStoreModel = (
         createdAt,
         host: mapUserToStoreModel(input.user),
         id: passphrase,
+        isLocked: input.isLocked ?? false,
         maxUsers: input.maxUsers ?? null,
         updatedAt: createdAt,
         users: [],

@@ -14,6 +14,7 @@ import { CreateRoomInput } from "src/rooms/dto/create-room.input";
 import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
 import { BadRequestTransformationFilter } from "src/filters/bad-request-exception-transformation.filter";
 import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
+import { ToggleLockRoomInput } from "src/rooms/dto/toggle-lock-room.input";
 
 @UseFilters(BadRequestTransformationFilter)
 @WebSocketGateway({
@@ -34,7 +35,7 @@ export class EventsGateway implements OnGatewayDisconnect {
     }
 
     @UsePipes(new ValidationPipe())
-    @SubscribeMessage("create_room")
+    @SubscribeMessage("CREATE_ROOM")
     async handleCreateRoomMessage(
         @ConnectedSocket()
         client: Socket,
@@ -44,13 +45,12 @@ export class EventsGateway implements OnGatewayDisconnect {
         const room = this.roomsService.createRoom(input);
 
         await client.join(room.id);
-        await this.server.to(room.id).emit("ROOM_CREATED", JSON.stringify(room));
 
         return room;
     }
 
     @UsePipes(new ValidationPipe())
-    @SubscribeMessage("join_room")
+    @SubscribeMessage("JOIN_ROOM")
     async handleJoinRoomMessage(
         @ConnectedSocket()
         client: Socket,
@@ -60,13 +60,13 @@ export class EventsGateway implements OnGatewayDisconnect {
         const room = this.roomsService.joinRoom(input);
 
         await client.join(room.id);
-        await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        await client.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
 
         return room;
     }
 
     @UsePipes(new ValidationPipe())
-    @SubscribeMessage("leave_room")
+    @SubscribeMessage("LEAVE_ROOM")
     async handleLeaveRoomMessage(
         @MessageBody()
         input: LeaveRoomInput,
@@ -82,6 +82,19 @@ export class EventsGateway implements OnGatewayDisconnect {
         } else {
             await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
         }
+    }
+
+    @UsePipes(new ValidationPipe())
+    @SubscribeMessage("TOGGLE_ROOM_LOCKED_STATE")
+    async handleLockRoomMessage(
+        @MessageBody()
+        input: ToggleLockRoomInput,
+    ) {
+        const room = this.roomsService.toggleRoomLockedState(input);
+
+        const event = room.isLocked ? "ROOM_LOCKED" : "ROOM_UNLOCKED";
+
+        await this.server.to(room.id).emit(event, JSON.stringify(room));
     }
 
     async handleDisconnect(socket: Socket): Promise<void> {

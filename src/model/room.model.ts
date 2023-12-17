@@ -2,8 +2,9 @@ import { User } from "./user.model";
 
 export interface Room {
     createdAt: Date;
-    id: string;
     host: User;
+    id: string;
+    isLocked: boolean;
     maxUsers: number | null;
     updatedAt: Date;
     users: User[];

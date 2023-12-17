@@ -9,6 +9,7 @@ import { Room } from "../model/room.model";
 import { LeaveRoomInput } from "./dto/leave-room.input";
 import { SuccessModel } from "src/model/success.model";
 import { mapUserToStoreModel } from "./util/map-user-to-store-model";
+import { ToggleLockRoomInput } from "./dto/toggle-lock-room.input";
 
 @Injectable()
 export class RoomsService {
@@ -26,11 +27,19 @@ export class RoomsService {
         return room.maxUsers && room.maxUsers === totalUsersIncludingHost;
     }
 
-    userHasAccessToRoom(room: Room, userId: string) {
-        const isUserRoomHost = room.host.id === userId;
+    isRoomLocked(room: Room) {
+        return room.isLocked;
+    }
+
+    isUserMemberOfRoom(room: Room, userId: string) {
+        const isUserRoomHost = this.isUserRoomHost(room, userId);
         const isUserMemberOfRoom = room.users.find((user) => user.id === userId);
 
         return isUserRoomHost || Boolean(isUserMemberOfRoom);
+    }
+
+    isUserRoomHost(room: Room, userId: string) {
+        return room.host.id === userId;
     }
 
     createRoom(input: CreateRoomInput): Room | null {
@@ -85,27 +94,34 @@ export class RoomsService {
 
         this.logger.info({ roomId, userId }, "Joining room for user");
 
-        const existingRoom = this.rooms.get(roomId);
+        const room = this.rooms.get(roomId);
 
-        if (!existingRoom) {
-            this.logger.info({ roomId, userId }, "Room with ID does not exist");
-            throw new NotFoundException("Room does not exist");
+        if (!room) {
+            const message = "Room with ID does not exist";
+            this.logger.info({ roomId, userId }, message);
+            throw new NotFoundException(message);
         }
 
-        if (this.userHasAccessToRoom(existingRoom, userId)) {
+        if (this.isUserMemberOfRoom(room, userId)) {
             this.logger.info({ roomId, userId }, "User is already a member of this room");
-
-            return existingRoom;
+            return room;
         }
 
-        if (this.isRoomFull(existingRoom)) {
-            this.logger.info({ roomId, userId }, "This room is full");
-            throw new UnauthorizedException("Room is full");
+        if (this.isRoomFull(room)) {
+            const message = "Room is full";
+            this.logger.info({ roomId, userId }, message);
+            throw new UnauthorizedException(message);
+        }
+
+        if (this.isRoomLocked(room)) {
+            const message = "Room is locked";
+            this.logger.info({ roomId, userId }, message);
+            throw new UnauthorizedException(message);
         }
 
         const updatedRoom: Room = {
-            ...existingRoom,
-            users: [...existingRoom.users, mapUserToStoreModel(user)],
+            ...room,
+            users: [...room.users, mapUserToStoreModel(user)],
         };
 
         this.rooms.set(roomId, updatedRoom);
@@ -161,5 +177,33 @@ export class RoomsService {
         }
 
         return { isHost: null, room: null, success: false };
+    }
+
+    toggleRoomLockedState({ roomId, user }: ToggleLockRoomInput) {
+        const userId = user.id;
+        const room = this.rooms.get(roomId);
+
+        if (!room) {
+            const message = "Room with ID does not exist";
+            this.logger.info({ roomId, userId }, message);
+            throw new NotFoundException(message);
+        }
+
+        const isRoomHost = this.isUserRoomHost(room, userId);
+
+        if (!isRoomHost) {
+            const message = "User is not host and cannot toggle room locked state";
+            this.logger.info({ roomId, userId }, message);
+            throw new UnauthorizedException(message);
+        }
+
+        const updatedRoom: Room = {
+            ...room,
+            isLocked: !room.isLocked,
+        };
+
+        this.rooms.set(roomId, updatedRoom);
+
+        return updatedRoom;
     }
 }
