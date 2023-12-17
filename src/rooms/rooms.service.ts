@@ -6,7 +6,6 @@ import { generateRoomId } from "./util/generate-room-id";
 import { mapCreateRoomInputToStoreModel } from "./util/map-create-room-input-to-store-model";
 import { PinoLogger } from "nestjs-pino";
 import { Room } from "../model/room.model";
-import { FindRoomsInput } from "./dto/find-rooms.input";
 import { LeaveRoomInput } from "./dto/leave-room.input";
 import { SuccessModel } from "src/model/success.model";
 import { Socket } from "socket.io";
@@ -78,17 +77,6 @@ export class RoomsService {
         return { success: true };
     }
 
-    findRoomsForUser({ userId }: FindRoomsInput): Room[] {
-        const matches = [];
-        for (const room of this.rooms.values()) {
-            if (this.userHasAccessToRoom(room, userId)) {
-                matches.push(room);
-            }
-        }
-
-        return matches;
-    }
-
     joinRoom({ roomId, user }: JoinRoomInput, client: Socket): Room | null {
         const { id: userId } = user;
 
@@ -122,8 +110,9 @@ export class RoomsService {
     }
 
     leaveRoom({ roomId, user }: LeaveRoomInput): SuccessModel {
-        const existingRoom = this.rooms.get(roomId);
         const { id: userId } = user;
+
+        const existingRoom = this.rooms.get(roomId);
 
         if (!existingRoom) {
             const message = "Room does not exist";

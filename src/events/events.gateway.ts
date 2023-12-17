@@ -1,7 +1,6 @@
 import {
     ConnectedSocket,
     MessageBody,
-    OnGatewayDisconnect,
     SubscribeMessage,
     WebSocketGateway,
     WebSocketServer,
@@ -13,7 +12,6 @@ import { JoinRoomInput } from "src/rooms/dto/join-room.input";
 import { CreateRoomInput } from "src/rooms/dto/create-room.input";
 import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
 import { BadRequestTransformationFilter } from "src/filters/bad-request-exception-transformation.filter";
-import { FindRoomsInput } from "src/rooms/dto/find-rooms.input";
 import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
 
 @UseFilters(BadRequestTransformationFilter)
@@ -22,7 +20,7 @@ import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
         origin: "*",
     },
 })
-export class EventsGateway implements OnGatewayDisconnect {
+export class EventsGateway {
     @WebSocketServer()
     server: Server;
 
@@ -45,15 +43,6 @@ export class EventsGateway implements OnGatewayDisconnect {
     }
 
     @UsePipes(new ValidationPipe())
-    @SubscribeMessage("find_rooms")
-    handleFindRoomsMessage(
-        @MessageBody()
-        input: FindRoomsInput,
-    ) {
-        return this.roomsService.findRoomsForUser(input);
-    }
-
-    @UsePipes(new ValidationPipe())
     @SubscribeMessage("join_room")
     handleJoinRoomMessage(
         @ConnectedSocket()
@@ -72,6 +61,4 @@ export class EventsGateway implements OnGatewayDisconnect {
     ) {
         return this.roomsService.leaveRoom(input);
     }
-
-    handleDisconnect(client: Socket) {}
 }

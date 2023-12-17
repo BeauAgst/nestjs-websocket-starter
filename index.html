@@ -13,16 +13,12 @@
         console.log('Room created?', response),
       );
 
-      socket.emit('find_rooms', { userId: "foo" }, response =>
+      socket.emit('join_room', { roomId: "CWQC", user: { id: "foot", name: "Beau2" } }, response =>
         console.log('Room created?', response),
       );
 
-      socket.emit('f7684d3b-ddfa-41b6-9751-075ce33b7c1c', { userId: "foo" }, response =>
-        console.log('Room activity?', response),
-      );
-
-      socket.emit('leave_room', { user: { id: "foo", name: "Beau" }, roomId: "a4e2b67b-ee9b-4458-9fc6-b6b115cf0f6e" }, response =>
-        console.log('Room deleted?', response),
+      socket.emit('leave_room', { user: { id: "foo", name: "Beau" }, roomId: "room" }, response =>
+        console.log('Room left?', response),
       );
     });
     socket.on('events', function (data) {
