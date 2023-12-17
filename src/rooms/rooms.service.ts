@@ -1,15 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import { FindRoomInput } from "./dto/find-room.input";
 import { CreateRoomInput } from "./dto/create-room.input";
 import { ConfigService } from "../config/config.service";
 import { JoinRoomInput } from "./dto/join-room.input";
-import { generateRoomPassphrase } from "./util/generate-room-passphrase";
+import { generateRoomId } from "./util/generate-room-id";
 import { mapCreateRoomInputToStoreModel } from "./util/map-create-room-input-to-store-model";
 import { PinoLogger } from "nestjs-pino";
 import { Room } from "../model/room.model";
 import { FindRoomsInput } from "./dto/find-rooms.input";
 import { LeaveRoomInput } from "./dto/leave-room.input";
 import { SuccessModel } from "src/model/success.model";
+import { Socket } from "socket.io";
 
 @Injectable()
 export class RoomsService {
@@ -29,60 +29,53 @@ export class RoomsService {
         return isUserRoomHost || Boolean(isUserMemberOfRoom);
     }
 
-    findRoomForPassphrase(passphrase: string): Room | null {
-        for (const room of this.rooms.values()) {
-            if (room.passphrase === passphrase) {
-                return room;
-            }
-        }
-
-        return null;
-    }
-
-    createRoom(input: CreateRoomInput): Room | null {
+    createRoom(input: CreateRoomInput, client: Socket): Room | null {
         this.logger.info({ userId: input.user.id }, "Creating room");
 
-        const createRoomWithUniquePassphrase = (): Room | null => {
-            const passphrase = generateRoomPassphrase(
-                this.configService.roomPassphraseAlphabet,
-                this.configService.roomPassphraseLength,
+        const createRoomWithUniqueRoomId = (): Room | null => {
+            const roomId = generateRoomId(
+                this.configService.roomIdAlphabet,
+                this.configService.roomIdLength,
             );
 
-            const roomWithPassphraseExists = this.findRoomForPassphrase(passphrase);
+            const existingRoom = this.rooms.get(roomId);
 
-            if (roomWithPassphraseExists) {
-                return createRoomWithUniquePassphrase();
+            if (existingRoom) {
+                return createRoomWithUniqueRoomId();
             }
 
-            const room = mapCreateRoomInputToStoreModel(input, passphrase);
+            const room = mapCreateRoomInputToStoreModel(input, roomId);
 
             this.rooms.set(room.id, room);
 
             return room;
         };
 
-        return createRoomWithUniquePassphrase();
+        const room = createRoomWithUniqueRoomId();
+
+        client.join(room.id);
+
+        return room;
     }
 
-    findRoom({ roomId, userId }: FindRoomInput): Room | null {
-        this.logger.info({ roomId, userId }, "Finding room for user");
+    findRoom(roomId: string): SuccessModel {
+        this.logger.info({ roomId }, "Finding room");
 
         const room = this.rooms.get(roomId);
 
         if (!room) {
-            this.logger.info({ roomId, userId }, "No room found matching this ID");
-            return null;
+            const message = "No room found matching this ID";
+            this.logger.info({ roomId }, message);
+            return { message, success: false };
         }
 
-        const userHasAccessToRoom = this.userHasAccessToRoom(room, userId);
-
-        if (!userHasAccessToRoom) {
-            this.logger.info({ roomId, userId }, "User does not have access to room");
-
-            return null;
+        if (room.maxUsers && room.maxUsers === room.users.length) {
+            const message = "The room is full";
+            this.logger.info({ roomId }, message);
+            return { message, success: false };
         }
 
-        return room ?? null;
+        return { success: true };
     }
 
     findRoomsForUser({ userId }: FindRoomsInput): Room[] {
@@ -96,23 +89,22 @@ export class RoomsService {
         return matches;
     }
 
-    joinRoom({ passphrase, user }: JoinRoomInput): Room | null {
+    joinRoom({ roomId, user }: JoinRoomInput, client: Socket): Room | null {
         const { id: userId } = user;
 
-        this.logger.info({ userId }, "Joining room for user");
+        this.logger.info({ roomId, userId }, "Joining room for user");
 
-        const existingRoom = this.findRoomForPassphrase(passphrase);
+        const existingRoom = this.rooms.get(roomId);
 
         if (!existingRoom) {
-            this.logger.info({ passphrase, userId }, "Room with passphrase does not exist");
+            this.logger.info({ roomId, userId }, "Room wit ID does not exist");
             return null;
         }
 
         if (this.userHasAccessToRoom(existingRoom, userId)) {
-            this.logger.info(
-                { roomId: existingRoom.id, userId },
-                "User is already a member of this room",
-            );
+            this.logger.info({ roomId, userId }, "User is already a member of this room");
+
+            client.join(roomId);
 
             return existingRoom;
         }
@@ -122,7 +114,9 @@ export class RoomsService {
             users: [...existingRoom.users, user],
         };
 
-        this.rooms.set(existingRoom.id, updatedRoom);
+        this.rooms.set(roomId, updatedRoom);
+
+        client.join(roomId);
 
         return updatedRoom;
     }

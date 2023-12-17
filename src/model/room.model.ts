@@ -5,7 +5,6 @@ export interface Room {
     id: string;
     host: User;
     maxUsers: number | null;
-    passphrase: string;
     updatedAt: Date;
     users: User[];
 }

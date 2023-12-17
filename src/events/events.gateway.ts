@@ -1,11 +1,13 @@
 import {
+    ConnectedSocket,
     MessageBody,
+    OnGatewayDisconnect,
     SubscribeMessage,
     WebSocketGateway,
     WebSocketServer,
 } from "@nestjs/websockets";
 import { PinoLogger } from "nestjs-pino";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 import { RoomsService } from "src/rooms/rooms.service";
 import { JoinRoomInput } from "src/rooms/dto/join-room.input";
 import { CreateRoomInput } from "src/rooms/dto/create-room.input";
@@ -20,7 +22,7 @@ import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
         origin: "*",
     },
 })
-export class EventsGateway {
+export class EventsGateway implements OnGatewayDisconnect {
     @WebSocketServer()
     server: Server;
 
@@ -34,10 +36,12 @@ export class EventsGateway {
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("create_room")
     handleCreateRoomMessage(
+        @ConnectedSocket()
+        client: Socket,
         @MessageBody()
         input: CreateRoomInput,
     ) {
-        return this.roomsService.createRoom(input);
+        return this.roomsService.createRoom(input, client);
     }
 
     @UsePipes(new ValidationPipe())
@@ -52,10 +56,12 @@ export class EventsGateway {
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("join_room")
     handleJoinRoomMessage(
+        @ConnectedSocket()
+        client: Socket,
         @MessageBody()
         input: JoinRoomInput,
     ) {
-        return this.roomsService.joinRoom(input);
+        return this.roomsService.joinRoom(input, client);
     }
 
     @UsePipes(new ValidationPipe())
@@ -66,4 +72,6 @@ export class EventsGateway {
     ) {
         return this.roomsService.leaveRoom(input);
     }
+
+    handleDisconnect(client: Socket) {}
 }

@@ -1,9 +1,9 @@
 import { Type } from "class-transformer";
-import { IsUUID, ValidateNested } from "class-validator";
+import { Length, ValidateNested } from "class-validator";
 import { User } from "src/model/user.model";
 
 export class LeaveRoomInput {
-    @IsUUID()
+    @Length(4, 4)
     roomId: string;
 
     @ValidateNested()

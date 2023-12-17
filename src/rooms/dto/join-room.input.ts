@@ -5,7 +5,7 @@ import { Type } from "class-transformer";
 export class JoinRoomInput {
     @Length(4, 4)
     @IsString()
-    passphrase: string;
+    roomId: string;
 
     @ValidateNested()
     @Type(() => User)
