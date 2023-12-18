@@ -10,6 +10,7 @@ import { LeaveRoomInput } from "./dto/leave-room.input";
 import { SuccessModel } from "src/model/success.model";
 import { mapUserToStoreModel } from "./util/map-user-to-store-model";
 import { ToggleLockRoomInput } from "./dto/toggle-lock-room.input";
+import { PassRoomOwnershipInput } from "./dto/pass-room-ownership.input";
 
 @Injectable()
 export class RoomsService {
@@ -189,6 +190,38 @@ export class RoomsService {
         };
 
         this.rooms.set(roomId, updatedRoom);
+
+        return updatedRoom;
+    }
+
+    passRoomOwnership({ roomId, user, newHost }: PassRoomOwnershipInput) {
+        const { id: userId, socketId } = user;
+        const room = this.rooms.get(roomId);
+
+        const userPerformingAction = this.findUserInRoom(room, socketId);
+        const userReceivingOwnership = this.findUserInRoom(room, newHost.socketId);
+
+        if (!userPerformingAction?.isHost) {
+            const message = "User does not have permission to pass room ownership";
+            this.logger.info({ roomId, userId }, message);
+            throw new UnauthorizedException(message);
+        }
+
+        if (!userReceivingOwnership) {
+            const message = "New host is not a member of the room";
+            this.logger.info({ roomId, userId, newHostId: newHost.id }, message);
+            throw new NotFoundException(message);
+        }
+
+        const updatedRoom: Room = {
+            ...room,
+            users: room.users.map((user) => ({
+                ...user,
+                isHost: newHost.socketId === user.socketId,
+            })),
+        };
+
+        this.rooms.set(room.id, updatedRoom);
 
         return updatedRoom;
     }

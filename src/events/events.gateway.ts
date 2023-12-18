@@ -15,6 +15,7 @@ import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
 import { BadRequestTransformationFilter } from "src/filters/bad-request-exception-transformation.filter";
 import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
 import { ToggleLockRoomInput } from "src/rooms/dto/toggle-lock-room.input";
+import { PassRoomOwnershipInput } from "src/rooms/dto/pass-room-ownership.input";
 
 @UseFilters(BadRequestTransformationFilter)
 @WebSocketGateway({
@@ -100,6 +101,21 @@ export class EventsGateway implements OnGatewayDisconnect {
         const room = this.roomsService.toggleRoomLockedState(input);
 
         await socket.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+
+        return room;
+    }
+
+    @UsePipes(new ValidationPipe())
+    @SubscribeMessage("PASS_ROOM_OWNERSHIP")
+    async handlePassedOwnershipMessage(
+        @ConnectedSocket()
+        client: Socket,
+        @MessageBody()
+        input: PassRoomOwnershipInput,
+    ) {
+        const room = this.roomsService.passRoomOwnership(input);
+
+        await client.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
 
         return room;
     }
