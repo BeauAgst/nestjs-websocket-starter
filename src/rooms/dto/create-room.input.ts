@@ -9,7 +9,7 @@ export class CreateRoomInput {
 
     @IsOptional()
     @Max(20)
-    @Min(0)
+    @Min(2)
     @IsNumber()
     maxUsers?: number;
 

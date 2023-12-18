@@ -1,7 +1,7 @@
-import { User } from "src/model/user.model";
+import { User } from "../../model/user.model";
 import { UserInput } from "../dto/user.input";
 
-export const mapUserToStoreModel = (user: UserInput, isHost: boolean): User => {
+export const mapUserInputToStoreModel = (user: UserInput, isHost: boolean): User => {
     return {
         id: user.id,
         isHost,

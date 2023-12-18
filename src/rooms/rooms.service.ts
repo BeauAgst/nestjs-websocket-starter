@@ -7,8 +7,8 @@ import { mapCreateRoomInputToStoreModel } from "./util/map-create-room-input-to-
 import { PinoLogger } from "nestjs-pino";
 import { Room } from "../model/room.model";
 import { LeaveRoomInput } from "./dto/leave-room.input";
-import { SuccessModel } from "src/model/success.model";
-import { mapUserToStoreModel } from "./util/map-user-to-store-model";
+import { SuccessModel } from "../model/success.model";
+import { mapUserInputToStoreModel } from "./util/map-user-input-to-store-model";
 import { ToggleLockRoomInput } from "./dto/toggle-lock-room.input";
 import { PassRoomOwnershipInput } from "./dto/pass-room-ownership.input";
 
@@ -23,15 +23,15 @@ export class RoomsService {
         this.logger.setContext(this.constructor.name);
     }
 
-    isRoomFull(room: Room) {
+    private isRoomFull(room: Room) {
         return room.maxUsers && room.maxUsers <= room.users.length;
     }
 
-    isRoomLocked(room: Room) {
+    private isRoomLocked(room: Room) {
         return room.isLocked;
     }
 
-    findUserInRoom(room: Room, socketId: string) {
+    private findUserInRoom(room: Room, socketId: string) {
         return room.users.find((user) => user.socketId === socketId);
     }
 
@@ -114,7 +114,8 @@ export class RoomsService {
 
         const updatedRoom: Room = {
             ...room,
-            users: [...room.users, mapUserToStoreModel(user, false)],
+            users: [...room.users, mapUserInputToStoreModel(user, false)],
+            updatedAt: new Date(),
         };
 
         this.rooms.set(roomId, updatedRoom);
@@ -187,6 +188,7 @@ export class RoomsService {
         const updatedRoom: Room = {
             ...room,
             isLocked: !room.isLocked,
+            updatedAt: new Date(),
         };
 
         this.rooms.set(roomId, updatedRoom);
@@ -219,6 +221,7 @@ export class RoomsService {
                 ...user,
                 isHost: newHost.socketId === user.socketId,
             })),
+            updatedAt: new Date(),
         };
 
         this.rooms.set(room.id, updatedRoom);

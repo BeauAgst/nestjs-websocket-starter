@@ -1,6 +1,6 @@
 import { CreateRoomInput } from "../dto/create-room.input";
 import { Room } from "../../model/room.model";
-import { mapUserToStoreModel } from "./map-user-to-store-model";
+import { mapUserInputToStoreModel } from "./map-user-input-to-store-model";
 
 export const mapCreateRoomInputToStoreModel = (
     input: CreateRoomInput,
@@ -14,6 +14,6 @@ export const mapCreateRoomInputToStoreModel = (
         isLocked: input.isLocked ?? false,
         maxUsers: input.maxUsers ?? null,
         updatedAt: createdAt,
-        users: [mapUserToStoreModel(input.user, true)],
+        users: [mapUserInputToStoreModel(input.user, true)],
     };
 };

@@ -8,14 +8,14 @@ import {
 } from "@nestjs/websockets";
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
-import { RoomsService } from "src/rooms/rooms.service";
-import { JoinRoomInput } from "src/rooms/dto/join-room.input";
-import { CreateRoomInput } from "src/rooms/dto/create-room.input";
+import { RoomsService } from "../rooms/rooms.service";
+import { JoinRoomInput } from "../rooms/dto/join-room.input";
+import { CreateRoomInput } from "../rooms/dto/create-room.input";
 import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
-import { BadRequestTransformationFilter } from "src/filters/bad-request-exception-transformation.filter";
-import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
-import { ToggleLockRoomInput } from "src/rooms/dto/toggle-lock-room.input";
-import { PassRoomOwnershipInput } from "src/rooms/dto/pass-room-ownership.input";
+import { BadRequestTransformationFilter } from "../filters/bad-request-exception-transformation.filter";
+import { LeaveRoomInput } from "../rooms/dto/leave-room.input";
+import { ToggleLockRoomInput } from "../rooms/dto/toggle-lock-room.input";
+import { PassRoomOwnershipInput } from "../rooms/dto/pass-room-ownership.input";
 
 @UseFilters(BadRequestTransformationFilter)
 @WebSocketGateway({
