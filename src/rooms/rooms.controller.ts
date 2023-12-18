@@ -1,6 +1,7 @@
 import { Controller, Get, NotFoundException, Param } from "@nestjs/common";
-import { RoomsService } from "./rooms.service";
+
 import { SuccessModel } from "../model/success.model";
+import { RoomsService } from "./rooms.service";
 
 @Controller("rooms")
 export class RoomsController {

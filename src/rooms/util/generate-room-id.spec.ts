@@ -1,4 +1,5 @@
 import { customAlphabet } from "nanoid";
+
 import { generateRoomId } from "./generate-room-id";
 
 jest.mock("nanoid", () => ({
@@ -23,7 +24,7 @@ describe("generateRoomId", () => {
         const result = generateRoomId(alphabet, size);
 
         expect(customAlphabet).toHaveBeenCalledWith(alphabet, size);
-        expect(result).toEqual("foo");
+        expect(result).toBe("foo");
     });
 
     test("should keep generating IDs if profane words are returned", () => {
@@ -39,6 +40,6 @@ describe("generateRoomId", () => {
 
         expect(customAlphabet).toHaveBeenCalledWith(alphabet, size);
         expect(mockGenerator).toHaveBeenCalledTimes(3);
-        expect(result).toEqual("foo");
+        expect(result).toBe("foo");
     });
 });

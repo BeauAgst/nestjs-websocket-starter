@@ -1,4 +1,4 @@
-import { UserInput } from "../dto/user.input";
+import type { UserInput } from "../dto/user.input";
 import { mapUserInputToStoreModel } from "./map-user-input-to-store-model";
 
 const TEST_USER_INPUT: UserInput = {
@@ -10,6 +10,7 @@ const TEST_USER_INPUT: UserInput = {
 describe("mapUserInputToStoreModel", () => {
     test("should map the input correctly", () => {
         const result = mapUserInputToStoreModel(TEST_USER_INPUT, true);
+
         expect(result).toEqual({
             id: TEST_USER_INPUT.id,
             isHost: true,
@@ -20,6 +21,7 @@ describe("mapUserInputToStoreModel", () => {
 
     test("should set isHost to false if value is set", () => {
         const result = mapUserInputToStoreModel(TEST_USER_INPUT, false);
-        expect(result.isHost).toEqual(false);
+
+        expect(result.isHost).toBe(false);
     });
 });

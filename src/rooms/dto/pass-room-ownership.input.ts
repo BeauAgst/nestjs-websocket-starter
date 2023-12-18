@@ -1,5 +1,6 @@
-import { IsString, Length, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
+import { IsString, Length, ValidateNested } from "class-validator";
+
 import { UserInput } from "./user.input";
 
 export class PassRoomOwnershipInput {

@@ -1,5 +1,5 @@
-import { User } from "../../model/user.model";
-import { CreateRoomInput } from "../dto/create-room.input";
+import type { User } from "../../model/user.model";
+import type { CreateRoomInput } from "../dto/create-room.input";
 import { mapCreateRoomInputToStoreModel } from "./map-create-room-input-to-store-model";
 import { mapUserInputToStoreModel } from "./map-user-input-to-store-model";
 
@@ -53,7 +53,8 @@ describe("mapCreateRoomInputToStoreModel", () => {
         };
 
         const result = mapCreateRoomInputToStoreModel(TEST_INPUT_NO_LOCKED_CONFIG, TEST_PASSPHRASE);
-        expect(result.isLocked).toEqual(false);
+
+        expect(result.isLocked).toBe(false);
     });
 
     test("should default maxUsers to null if no configuration is passed", () => {
@@ -63,6 +64,7 @@ describe("mapCreateRoomInputToStoreModel", () => {
         };
 
         const result = mapCreateRoomInputToStoreModel(TEST_INPUT_NO_LOCKED_CONFIG, TEST_PASSPHRASE);
-        expect(result.maxUsers).toEqual(null);
+
+        expect(result.maxUsers).toBeNull();
     });
 });

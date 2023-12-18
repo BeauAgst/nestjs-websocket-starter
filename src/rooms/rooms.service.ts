@@ -1,16 +1,17 @@
 import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { CreateRoomInput } from "./dto/create-room.input";
+import { PinoLogger } from "nestjs-pino";
+
 import { ConfigService } from "../config/config.service";
-import { JoinRoomInput } from "./dto/join-room.input";
+import type { Room } from "../model/room.model";
+import type { SuccessModel } from "../model/success.model";
+import type { CreateRoomInput } from "./dto/create-room.input";
+import type { JoinRoomInput } from "./dto/join-room.input";
+import type { LeaveRoomInput } from "./dto/leave-room.input";
+import type { PassRoomOwnershipInput } from "./dto/pass-room-ownership.input";
+import type { ToggleLockRoomInput } from "./dto/toggle-lock-room.input";
 import { generateRoomId } from "./util/generate-room-id";
 import { mapCreateRoomInputToStoreModel } from "./util/map-create-room-input-to-store-model";
-import { PinoLogger } from "nestjs-pino";
-import { Room } from "../model/room.model";
-import { LeaveRoomInput } from "./dto/leave-room.input";
-import { SuccessModel } from "../model/success.model";
 import { mapUserInputToStoreModel } from "./util/map-user-input-to-store-model";
-import { ToggleLockRoomInput } from "./dto/toggle-lock-room.input";
-import { PassRoomOwnershipInput } from "./dto/pass-room-ownership.input";
 
 @Injectable()
 export class RoomsService {

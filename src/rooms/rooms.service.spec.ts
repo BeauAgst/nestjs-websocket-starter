@@ -1,14 +1,16 @@
-import { Test, TestingModule } from "@nestjs/testing";
+import { createMock } from "@golevelup/ts-jest";
+import type { TestingModule } from "@nestjs/testing";
+import { Test } from "@nestjs/testing";
+import { PinoLogger } from "nestjs-pino";
+
+import { ConfigService } from "../config/config.service";
+import type { Room } from "../model/room.model";
+import type { User } from "../model/user.model";
+import type { CreateRoomInput } from "./dto/create-room.input";
+import type { UserInput } from "./dto/user.input";
 import { RoomsService } from "./rooms.service";
 import { generateRoomId } from "./util/generate-room-id";
 import { mapCreateRoomInputToStoreModel } from "./util/map-create-room-input-to-store-model";
-import { Room } from "../model/room.model";
-import { User } from "../model/user.model";
-import { CreateRoomInput } from "./dto/create-room.input";
-import { UserInput } from "./dto/user.input";
-import { ConfigService } from "../config/config.service";
-import { PinoLogger } from "nestjs-pino";
-import { createMock } from "@golevelup/ts-jest";
 
 jest.mock("./util/generate-room-id");
 jest.mock("./util/map-create-room-input-to-store-model");

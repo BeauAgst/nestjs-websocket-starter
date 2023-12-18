@@ -1,5 +1,5 @@
-import { CreateRoomInput } from "../dto/create-room.input";
-import { Room } from "../../model/room.model";
+import type { Room } from "../../model/room.model";
+import type { CreateRoomInput } from "../dto/create-room.input";
 import { mapUserInputToStoreModel } from "./map-user-input-to-store-model";
 
 export const mapCreateRoomInputToStoreModel = (

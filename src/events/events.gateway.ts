@@ -1,21 +1,22 @@
+import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
+import type { OnGatewayDisconnect } from "@nestjs/websockets";
 import {
     ConnectedSocket,
     MessageBody,
-    OnGatewayDisconnect,
     SubscribeMessage,
     WebSocketGateway,
     WebSocketServer,
 } from "@nestjs/websockets";
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
-import { RoomsService } from "../rooms/rooms.service";
-import { JoinRoomInput } from "../rooms/dto/join-room.input";
-import { CreateRoomInput } from "../rooms/dto/create-room.input";
-import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
+
 import { BadRequestTransformationFilter } from "../filters/bad-request-exception-transformation.filter";
+import { CreateRoomInput } from "../rooms/dto/create-room.input";
+import { JoinRoomInput } from "../rooms/dto/join-room.input";
 import { LeaveRoomInput } from "../rooms/dto/leave-room.input";
-import { ToggleLockRoomInput } from "../rooms/dto/toggle-lock-room.input";
 import { PassRoomOwnershipInput } from "../rooms/dto/pass-room-ownership.input";
+import { ToggleLockRoomInput } from "../rooms/dto/toggle-lock-room.input";
+import { RoomsService } from "../rooms/rooms.service";
 
 @UseFilters(BadRequestTransformationFilter)
 @WebSocketGateway({
