@@ -1,18 +1,13 @@
 import { Type } from "class-transformer";
-import { IsBoolean, IsNumber, IsOptional, Max, Min, ValidateNested } from "class-validator";
+import { ValidateNested } from "class-validator";
 
+import { RoomConfigurationInput } from "./room-configuration.input";
 import { UserInput } from "./user.input";
 
 export class CreateRoomInput {
-    @IsOptional()
-    @IsBoolean()
-    isLocked?: boolean;
-
-    @IsOptional()
-    @Max(20)
-    @Min(2)
-    @IsNumber()
-    maxUsers?: number;
+    @ValidateNested()
+    @Type(() => RoomConfigurationInput)
+    room: RoomConfigurationInput;
 
     @ValidateNested()
     @Type(() => UserInput)

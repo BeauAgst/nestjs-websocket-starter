@@ -1,16 +1,14 @@
-import { Type } from "class-transformer";
-import { IsAlphanumeric, IsString, IsUppercase, Length, ValidateNested } from "class-validator";
+import { IsAlphanumeric, IsString, IsUppercase, IsUUID, Length } from "class-validator";
 
-import { UserInput } from "./user.input";
+import { ROOM_ID_LENGTH } from "../util/constants";
 
 export class ToggleLockRoomInput {
-    @Length(4, 4)
+    @Length(ROOM_ID_LENGTH, ROOM_ID_LENGTH)
     @IsUppercase()
     @IsAlphanumeric()
     @IsString()
     roomId: string;
 
-    @ValidateNested()
-    @Type(() => UserInput)
-    user: UserInput;
+    @IsUUID()
+    userId: string;
 }

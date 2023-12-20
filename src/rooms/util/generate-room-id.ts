@@ -2,15 +2,13 @@
 const Filter = require("bad-words");
 import { customAlphabet } from "nanoid";
 
+import { ROOM_ID_ALPHABET, ROOM_ID_LENGTH } from "./constants";
+
 const filter = new Filter();
 
-const generateCleanRoomId = (generator) => {
+export const generateRoomId = () => {
+    const generator = customAlphabet(ROOM_ID_ALPHABET, ROOM_ID_LENGTH);
     const roomId = generator();
-    if (filter.isProfane(roomId)) return generateCleanRoomId(generator);
+    if (filter.isProfane(roomId)) return generateRoomId();
     return roomId;
-};
-
-export const generateRoomId = (alphabet, size) => {
-    const generator = customAlphabet(alphabet, size);
-    return generateCleanRoomId(generator);
 };

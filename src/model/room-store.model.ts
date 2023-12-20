@@ -1,10 +1,9 @@
-import type { User } from "./user.model";
-
-export interface Room {
+export interface RoomStoreModel {
     createdAt: Date;
+    hostId: string;
     id: string;
     isLocked: boolean;
     maxUsers: number | null;
     updatedAt: Date;
-    users: User[];
+    users: Set<string>;
 }

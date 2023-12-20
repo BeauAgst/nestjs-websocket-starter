@@ -1,9 +1,9 @@
-import { IsNotEmpty, IsString, IsUUID, Length } from "class-validator";
+import { IsNotEmpty, IsOptional, IsString, IsUUID, Length } from "class-validator";
 
 export class UserInput {
-    @IsNotEmpty()
+    @IsOptional()
     @IsUUID()
-    id: string;
+    id?: string;
 
     @IsNotEmpty()
     @Length(2, 20)

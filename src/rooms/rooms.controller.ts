@@ -9,7 +9,7 @@ export class RoomsController {
 
     @Get(":id")
     getRoom(@Param("id") id: string): SuccessModel {
-        const result = this.roomsService.findRoom(id);
+        const result = this.roomsService.findRoomById(id);
 
         if (!result.success) {
             throw new NotFoundException(result.message);

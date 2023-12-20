@@ -9,6 +9,8 @@ import {
 } from "@nestjs/websockets";
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
+import { UserStatus } from "src/model/enum/user-status.enum";
+import { UsersService } from "src/users/users.service";
 
 import { BadRequestTransformationFilter } from "../filters/bad-request-exception-transformation.filter";
 import { CreateRoomInput } from "../rooms/dto/create-room.input";
@@ -32,8 +34,13 @@ export class EventsGateway implements OnGatewayDisconnect {
     constructor(
         private readonly logger: PinoLogger,
         private readonly roomsService: RoomsService,
+        private readonly usersService: UsersService,
     ) {
         this.logger.setContext(this.constructor.name);
+    }
+
+    private broadcastUpdate(socket: Socket, roomId: string, payload: unknown) {
+        return socket.broadcast.to(roomId).emit("event", JSON.stringify(payload));
     }
 
     @UsePipes(new ValidationPipe())
@@ -44,11 +51,15 @@ export class EventsGateway implements OnGatewayDisconnect {
         @MessageBody()
         input: CreateRoomInput,
     ) {
-        const room = this.roomsService.createRoom(input);
+        const user = this.usersService.getOrCreateUser(input.user);
+        const room = this.roomsService.createRoom(input.room, user.id);
 
         await socket.join(room.id);
 
-        return room;
+        const userIds = this.roomsService.getUserIdsForRoom(room.id);
+        const usersInRoom = this.usersService.getUsersById(userIds);
+
+        return { me: user, room, users: usersInRoom };
     }
 
     @UsePipes(new ValidationPipe())
@@ -59,12 +70,17 @@ export class EventsGateway implements OnGatewayDisconnect {
         @MessageBody()
         input: JoinRoomInput,
     ) {
-        const room = this.roomsService.joinRoom(input);
+        const user = this.usersService.getOrCreateUser(input.user);
+
+        const room = this.roomsService.joinRoom(input.roomId, user.id);
+
+        const userIds = this.roomsService.getUserIdsForRoom(room.id);
+        const usersInRoom = this.usersService.getUsersById(userIds);
 
         await socket.join(room.id);
-        await socket.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        await this.broadcastUpdate(socket, room.id, { room, users: usersInRoom });
 
-        return room;
+        return { me: user, room, users: usersInRoom };
     }
 
     @UsePipes(new ValidationPipe())
@@ -75,20 +91,23 @@ export class EventsGateway implements OnGatewayDisconnect {
         @MessageBody()
         input: LeaveRoomInput,
     ) {
-        const { isHost, room, success } = await this.roomsService.leaveRoomWithSocketId(
-            input.user.socketId,
-        );
+        const { roomId, userId } = input;
+        const room = this.roomsService.leaveRoom(roomId, userId);
 
-        if (!success) return { success: false };
-
-        if (isHost) {
-            this.server.in(room.id).socketsLeave(room.id);
-        } else {
-            await socket.leave(room.id);
-            await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        if (!room) {
+            await socket.in(roomId).socketsLeave(roomId);
+            return true;
         }
 
-        return { success: true };
+        const userIds = this.roomsService.getUserIdsForRoom(roomId);
+        const usersInRoom = this.usersService.getUsersById(userIds);
+
+        const payload = { room, users: usersInRoom };
+
+        await socket.leave(roomId);
+        await this.broadcastUpdate(socket, roomId, payload);
+
+        return payload;
     }
 
     @UsePipes(new ValidationPipe())
@@ -99,39 +118,53 @@ export class EventsGateway implements OnGatewayDisconnect {
         @MessageBody()
         input: ToggleLockRoomInput,
     ) {
-        const room = this.roomsService.toggleRoomLockedState(input);
+        const room = this.roomsService.toggleRoomLockedState(input.roomId, input.userId);
+        const payload = { room };
 
-        await socket.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        await this.broadcastUpdate(socket, room.id, payload);
 
-        return room;
+        return payload;
     }
 
     @UsePipes(new ValidationPipe())
     @SubscribeMessage("PASS_ROOM_OWNERSHIP")
     async handlePassedOwnershipMessage(
         @ConnectedSocket()
-        client: Socket,
+        socket: Socket,
         @MessageBody()
         input: PassRoomOwnershipInput,
     ) {
         const room = this.roomsService.passRoomOwnership(input);
+        const payload = { room };
 
-        await client.broadcast.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        await this.broadcastUpdate(socket, room.id, payload);
 
-        return room;
+        return payload;
     }
 
-    async handleDisconnect(socket: Socket): Promise<void> {
-        this.logger.info({ socketId: socket.id }, "Socket disconnected");
-        const { isHost, room, success } = await this.roomsService.leaveRoomWithSocketId(socket.id);
+    async handleDisconnect(socket: Socket) {
+        const { id: socketId } = socket;
+        this.logger.info({ socketId }, "Socket disconnected");
+        const user = this.usersService.updateUserStatusForSocketId(socketId, UserStatus.Inactive);
 
-        if (!success) return;
-
-        if (isHost) {
-            await socket.broadcast.to(room.id).emit("ROOM_CLOSED", JSON.stringify(room));
-            this.server.in(room.id).socketsLeave(room.id);
-        } else {
-            await this.server.to(room.id).emit("ROOM_UPDATED", JSON.stringify(room));
+        if (!user) {
+            this.logger.info({ socketId }, "No user found for this socket ID");
+            return;
         }
+
+        const rooms = this.roomsService.findRoomsForUser(user.id);
+
+        if (!rooms?.length) {
+            this.logger.info({ socketId }, "User was not in any rooms");
+            return;
+        }
+
+        const broadcasts = rooms.map((room) => {
+            const userIds = this.roomsService.getUserIdsForRoom(room.id);
+            const usersInRoom = this.usersService.getUsersById(userIds);
+            return this.broadcastUpdate(socket, room.id, { room, users: usersInRoom });
+        });
+
+        await Promise.all(broadcasts);
     }
 }

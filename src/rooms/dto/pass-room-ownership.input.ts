@@ -1,18 +1,17 @@
-import { Type } from "class-transformer";
-import { IsString, Length, ValidateNested } from "class-validator";
+import { IsAlphanumeric, IsString, IsUppercase, IsUUID, Length } from "class-validator";
 
-import { UserInput } from "./user.input";
+import { ROOM_ID_LENGTH } from "../util/constants";
 
 export class PassRoomOwnershipInput {
-    @Length(4, 4)
+    @IsUUID()
+    newHostId: string;
+
+    @Length(ROOM_ID_LENGTH, ROOM_ID_LENGTH)
+    @IsUppercase()
+    @IsAlphanumeric()
     @IsString()
     roomId: string;
 
-    @ValidateNested()
-    @Type(() => UserInput)
-    user: UserInput;
-
-    @ValidateNested()
-    @Type(() => UserInput)
-    newHost: UserInput;
+    @IsUUID()
+    userId: string;
 }

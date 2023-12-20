@@ -1,0 +1,178 @@
+<html>
+
+<head>
+  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"
+    integrity="sha384-KAZ4DtjNhLChOB/hxXuKqhMLYvx3b5MlT55xPEiNmREKRzeEm+RVPlTnAn0ajQNs"
+    crossorigin="anonymous"></script>
+</head>
+
+<body>
+  <pre>
+    <code class="payload">
+    </code>
+  </pre>
+  <div class="onboarding-container">
+    <input class="name-input" type="text" placeholder="Name">
+
+    <div class="create-container">
+      <h2>Create room</h2>
+      <button class="create">Create room</button>
+    </div>
+
+    <div class="join-container">
+      <h2>Join room</h2>
+      <input class="room-input" type="text" placeholder="Room ID">
+      <button class="join">Join room</button>
+    </div>
+  </div>
+
+  <div class="room-container" style="display:none">
+    <div class="room-id"></div>
+    <button class="lock">toggle lock state</button>
+    <button class="reset">reset game</button>
+    <button class="leave">Leave room</button>
+    <table class="members"></table>
+    <div class="result"></div>
+  </div>
+
+  <script>
+    const updatePayload = () => {
+      document.querySelector(".payload").innerHTML = JSON.stringify({
+        me: window.me,
+        room: window.room,
+        users: window.users,
+      }, null, "\t")
+    }
+    const updateMembers = () => {
+      const rows = window.users.map((user) => `<tr><td>${user.name}</td></tr>`).join('\n')
+      const content = `<tbody>${rows}</tbody>`
+
+      document.querySelector('.members').innerHTML = content
+    }
+
+    const socket = io('http://localhost:3000/rooms');
+    socket.on('connect', function () {
+      console.log('Connected');
+
+      window.me = {
+        id: localStorage.getItem("userId") || undefined,
+        name: null,
+        socketId: socket.id
+      }
+
+      console.log(window.me)
+
+    });
+    socket.on('event', function (data) {
+      const parsed = JSON.parse(data)
+      console.log('event', parsed);
+      if (parsed.me) window.me = parsed.me
+      if (parsed.room) window.room = parsed.room
+      if (parsed.users) window.users = parsed.users
+
+      updatePayload()
+      updateMembers()
+    });
+
+    socket.on('exception', function (data) {
+      console.log('event', data);
+    });
+    socket.on('disconnect', function () {
+      console.log('Disconnected');
+    });
+
+    const onboardingContainer = document.querySelector(".onboarding-container")
+    const roomContainer = document.querySelector(".room-container")
+
+    const roomId = document.querySelector(".room-id")
+    const nameInput = document.querySelector(".name-input")
+    const createButton = document.querySelector(".create")
+    const roomIdInput = document.querySelector(".room-input")
+    const joinButton = document.querySelector(".join")
+    const leaveButton = document.querySelector(".leave")
+
+    nameInput.addEventListener("input", (event) => {
+      window.me.name = event.target.value
+    })
+
+    createButton.addEventListener("click", () => {
+      if (!nameInput.value.trim()) return
+
+      socket.emit('CREATE_ROOM', { room: { maxUsers: 3 }, user: window.me }, data => {
+        console.log('CREATE_ROOM', data);
+        window.me = data.me
+        window.room = data.room
+        window.users = data.users
+
+        if (data.me) localStorage.setItem("userId", window.me.id)
+
+        roomId.innerHTML = data.room.id
+        onboardingContainer.style.display = "none"
+        roomContainer.style.display = "block"
+        updatePayload()
+        updateMembers()
+      });
+    })
+
+    joinButton.addEventListener("click", () => {
+      if (!nameInput.value.trim()) return
+      if (!roomIdInput.value.trim()) return
+
+      socket.emit('JOIN_ROOM', { roomId: roomIdInput.value, user: window.me }, data => {
+        console.log('JOIN_ROOM', data)
+        if (data.me) window.me = data.me
+        if (data.room) window.room = data.room
+        if (data.users) window.users = data.users
+
+        if (data.me) localStorage.setItem("userId", window.me.id)
+
+        roomId.innerHTML = data.room.id
+        onboardingContainer.style.display = "none"
+        roomContainer.style.display = "block"
+        updatePayload()
+        updateMembers()
+      });
+    })
+
+    const lockButton = document.body.querySelector(".lock")
+    const resetButton = document.body.querySelector(".reset")
+
+    lockButton.addEventListener("click", () => {
+      socket.emit("TOGGLE_ROOM_LOCKED_STATE", { userId: window.me.id, roomId: window.room.id }, data => {
+        lockButton.innerText = data.room.isLocked ? 'Unlock' : 'Lock'
+
+        if (data.me) window.me = data.me
+        if (data.room) window.room = data.room
+        if (data.users) window.users = data.users
+
+        updatePayload()
+        updateMembers()
+      })
+    })
+
+    resetButton.addEventListener("click", () => {
+      socket.emit("RESTART_GAME", { user: window.me, roomId: window.room.id }, data => {
+        if (data.me) window.me = data.me
+        if (data.room) window.room = data.room
+        if (data.users) window.users = data.users
+
+        updatePayload()
+        updateMembers()
+      })
+    })
+
+    leaveButton.addEventListener("click", () => {
+      socket.emit('LEAVE_ROOM', { roomId: window.room.id, userId: window.me.id }, data => {
+        if (data.me) window.me = data.me
+        if (data.room) window.room = data.room
+        if (data.users) window.users = data.users
+        updatePayload()
+
+        onboardingContainer.style.display = "block"
+        roomContainer.style.display = "none"
+      });
+    })
+  </script>
+</body>
+
+</html>
