@@ -133,7 +133,7 @@
       const userData = getUserData()
       const [name, setName] = useState(userData.name ?? "")
       const [maxUsers, setMaxUsers] = useState("")
-      const [roomCode, setRoomCode] = useState("")
+      const [roomCode, setRoomCode] = useState(localStorage.getItem("roomCode") || "")
       const isValidName = /^[a-zA-Z ]{2,}$/.test(name)
       const isValidRoomCode = /^[A-Z0-9]{4}$/.test(roomCode)
       const isValidUsers = !maxUsers || /^\d{1,2}$/.test(maxUsers)
@@ -159,8 +159,14 @@
 
       const userId = userData.id ?? undefined
 
-      const onClickCreateRoom = () => onCreateRoom({ maxUsers, name, userId })
-      const onClickJoinRoom = () => onJoinRoom({ name, roomCode, userId })
+      const onClickCreateRoom = () => {
+        localStorage.setItem("roomCode", roomCode)
+        onCreateRoom({ maxUsers, name, userId })
+      }
+      const onClickJoinRoom = () => {
+        localStorage.setItem("roomCode", roomCode)
+        onJoinRoom({ name, roomCode, userId })
+      }
       const onSubmit = (e) => e.preventDefault()
 
       return (<form onSubmit={onSubmit}>
