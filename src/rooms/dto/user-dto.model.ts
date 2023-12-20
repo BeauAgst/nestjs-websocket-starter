@@ -9,5 +9,8 @@ export class UserDtoModel {
     name: string;
 
     @Expose()
+    socketId: string;
+
+    @Expose()
     status: LikeUserStatus;
 }

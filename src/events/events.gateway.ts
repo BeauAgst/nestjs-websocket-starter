@@ -10,6 +10,7 @@ import {
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
 import { UserStatus } from "src/model/enum/user-status.enum";
+import { KickUserInput } from "src/rooms/dto/kick-user.input";
 import { UsersService } from "src/users/users.service";
 
 import { BadRequestTransformationFilter } from "../filters/bad-request-exception-transformation.filter";
@@ -51,7 +52,7 @@ export class EventsGateway implements OnGatewayDisconnect {
         @MessageBody()
         input: CreateRoomInput,
     ) {
-        const user = this.usersService.getOrCreateUser(input.user);
+        const user = this.usersService.getOrCreateUser(input.user, socket.id);
         const room = this.roomsService.createRoom(input.room, user.id);
 
         await socket.join(room.id);
@@ -70,7 +71,7 @@ export class EventsGateway implements OnGatewayDisconnect {
         @MessageBody()
         input: JoinRoomInput,
     ) {
-        const user = this.usersService.getOrCreateUser(input.user);
+        const user = this.usersService.getOrCreateUser(input.user, socket.id);
 
         const room = this.roomsService.joinRoom(input.roomId, user.id);
 
@@ -119,7 +120,10 @@ export class EventsGateway implements OnGatewayDisconnect {
         input: ToggleLockRoomInput,
     ) {
         const room = this.roomsService.toggleRoomLockedState(input.roomId, input.userId);
-        const payload = { room };
+        const userIds = this.roomsService.getUserIdsForRoom(room.id);
+        const usersInRoom = this.usersService.getUsersById(userIds);
+
+        const payload = { room, users: usersInRoom };
 
         await this.broadcastUpdate(socket, room.id, payload);
 
@@ -135,9 +139,34 @@ export class EventsGateway implements OnGatewayDisconnect {
         input: PassRoomOwnershipInput,
     ) {
         const room = this.roomsService.passRoomOwnership(input);
-        const payload = { room };
+        const userIds = this.roomsService.getUserIdsForRoom(room.id);
+        const usersInRoom = this.usersService.getUsersById(userIds);
+        const payload = { room, users: usersInRoom };
 
         await this.broadcastUpdate(socket, room.id, payload);
+
+        return payload;
+    }
+
+    @UsePipes(new ValidationPipe())
+    @SubscribeMessage("KICK_USER")
+    async handleKickUser(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: KickUserInput,
+    ) {
+        const { roomId, userId, userIdToKick } = input;
+        const room = this.roomsService.kickUserFromRoom(roomId, userId, userIdToKick);
+        const userIds = this.roomsService.getUserIdsForRoom(roomId);
+        const usersInRoom = this.usersService.getUsersById(userIds);
+        const payload = { room, users: usersInRoom };
+
+        const kickedUser = this.usersService.getUserById(userIdToKick);
+
+        await this.server.in(kickedUser.socketId).socketsLeave(roomId);
+        await socket.to(kickedUser.socketId).emit("event", JSON.stringify({ kicked: true }));
+        await this.broadcastUpdate(socket, roomId, payload);
 
         return payload;
     }

@@ -9,9 +9,4 @@ export class UserInput {
     @Length(2, 20)
     @IsString()
     name: string;
-
-    @IsNotEmpty()
-    @Length(20, 20)
-    @IsString()
-    socketId: string;
 }

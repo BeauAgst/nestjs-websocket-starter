@@ -34,6 +34,7 @@ export class UsersStore {
             createdAt,
             id,
             name: input.name,
+            socketId: input.socketId,
             status: UserStatus.Active,
             updatedAt: createdAt,
         };

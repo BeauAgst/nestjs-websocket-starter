@@ -7,172 +7,208 @@
 </head>
 
 <body>
-  <pre>
-    <code class="payload">
-    </code>
-  </pre>
-  <div class="onboarding-container">
-    <input class="name-input" type="text" placeholder="Name">
-
-    <div class="create-container">
-      <h2>Create room</h2>
-      <button class="create">Create room</button>
-    </div>
-
-    <div class="join-container">
-      <h2>Join room</h2>
-      <input class="room-input" type="text" placeholder="Room ID">
-      <button class="join">Join room</button>
-    </div>
-  </div>
-
-  <div class="room-container" style="display:none">
-    <div class="room-id"></div>
-    <button class="lock">toggle lock state</button>
-    <button class="reset">reset game</button>
-    <button class="leave">Leave room</button>
-    <table class="members"></table>
-    <div class="result"></div>
-  </div>
-
-  <script>
-    const updatePayload = () => {
-      document.querySelector(".payload").innerHTML = JSON.stringify({
-        me: window.me,
-        room: window.room,
-        users: window.users,
-      }, null, "\t")
-    }
-    const updateMembers = () => {
-      const rows = window.users.map((user) => `<tr><td>${user.name}</td></tr>`).join('\n')
-      const content = `<tbody>${rows}</tbody>`
-
-      document.querySelector('.members').innerHTML = content
-    }
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react,stage-3">
+    const { useState, useEffect } = React;
 
     const socket = io('http://localhost:3000/rooms');
-    socket.on('connect', function () {
-      console.log('Connected');
 
-      window.me = {
-        id: localStorage.getItem("userId") || undefined,
-        name: null,
-        socketId: socket.id
+    const getUserData = () => {
+      const data = localStorage.getItem("user")
+
+      if (data) {
+        return JSON.parse(data)
       }
 
-      console.log(window.me)
+      return {}
+    }
 
-    });
-    socket.on('event', function (data) {
-      const parsed = JSON.parse(data)
-      console.log('event', parsed);
-      if (parsed.me) window.me = parsed.me
-      if (parsed.room) window.room = parsed.room
-      if (parsed.users) window.users = parsed.users
+    const Container = () => {
+      const [inRoom, setInRoom] = useState(false)
+      const [isConnected, setIsConnected] = useState(socket.connected);
+      const [me, setMe] = useState({});
+      const [room, setRoom] = useState({});
+      const [users, setUsers] = useState([]);
 
-      updatePayload()
-      updateMembers()
-    });
+      useEffect(() => {
+        onConnect = () => setIsConnected(true);
+        onDisconnect = () => setIsConnected(false);
+        onEvent = (event) => {
+          const parsed = JSON.parse(event)
+          console.log('EVENT', parsed);
 
-    socket.on('exception', function (data) {
-      console.log('event', data);
-    });
-    socket.on('disconnect', function () {
-      console.log('Disconnected');
-    });
+          if (parsed.kicked) {
+            setInRoom(false)
+            setRoom({})
+            setUsers([])
+          }
 
-    const onboardingContainer = document.querySelector(".onboarding-container")
-    const roomContainer = document.querySelector(".room-container")
+          if (parsed.room) setRoom(parsed.room)
+          if (parsed.users) setUsers(parsed.users)
+        }
 
-    const roomId = document.querySelector(".room-id")
-    const nameInput = document.querySelector(".name-input")
-    const createButton = document.querySelector(".create")
-    const roomIdInput = document.querySelector(".room-input")
-    const joinButton = document.querySelector(".join")
-    const leaveButton = document.querySelector(".leave")
+        socket.on('connect', onConnect);
+        socket.on('disconnect', onDisconnect);
+        socket.on('event', onEvent);
 
-    nameInput.addEventListener("input", (event) => {
-      window.me.name = event.target.value
-    })
+        return () => {
+          socket.off('connect', onConnect);
+          socket.off('disconnect', onDisconnect);
+          socket.off('event', onEvent);
+        };
+      }, []);
 
-    createButton.addEventListener("click", () => {
-      if (!nameInput.value.trim()) return
+      const onCreateRoom = ({ maxUsers, name, userId }) => {
+        socket.emit('CREATE_ROOM', { room: { maxUsers: maxUsers || undefined }, user: { id: userId, name } }, data => {
+          console.log('CREATE_ROOM', data);
 
-      socket.emit('CREATE_ROOM', { room: { maxUsers: 3 }, user: window.me }, data => {
-        console.log('CREATE_ROOM', data);
-        window.me = data.me
-        window.room = data.room
-        window.users = data.users
+          localStorage.setItem("user", JSON.stringify(data.me))
 
-        if (data.me) localStorage.setItem("userId", window.me.id)
+          setMe(data.me)
+          setRoom(data.room)
+          setUsers(data.users)
+          setInRoom(true)
+        });
+      }
 
-        roomId.innerHTML = data.room.id
-        onboardingContainer.style.display = "none"
-        roomContainer.style.display = "block"
-        updatePayload()
-        updateMembers()
-      });
-    })
+      const onJoinRoom = ({ name, roomCode, userId }) => {
+        socket.emit('JOIN_ROOM', { roomId: roomCode, user: { id: userId, name } }, data => {
+          console.log('JOIN_ROOM', data)
 
-    joinButton.addEventListener("click", () => {
-      if (!nameInput.value.trim()) return
-      if (!roomIdInput.value.trim()) return
+          localStorage.setItem("user", JSON.stringify(data.me))
 
-      socket.emit('JOIN_ROOM', { roomId: roomIdInput.value, user: window.me }, data => {
-        console.log('JOIN_ROOM', data)
-        if (data.me) window.me = data.me
-        if (data.room) window.room = data.room
-        if (data.users) window.users = data.users
+          setMe(data.me)
+          setRoom(data.room)
+          setUsers(data.users)
+          setInRoom(true)
+        });
+      }
 
-        if (data.me) localStorage.setItem("userId", window.me.id)
+      const onClickToggleLock = () => {
+        socket.emit("TOGGLE_ROOM_LOCKED_STATE", { userId: me.id, roomId: room.id }, data => {
+          console.log('TOGGLE_LOCK_ROOM', data)
 
-        roomId.innerHTML = data.room.id
-        onboardingContainer.style.display = "none"
-        roomContainer.style.display = "block"
-        updatePayload()
-        updateMembers()
-      });
-    })
+          setRoom(data.room)
+          setUsers(data.users)
+        })
+      }
 
-    const lockButton = document.body.querySelector(".lock")
-    const resetButton = document.body.querySelector(".reset")
+      const onClickKick = (userId) => {
+        socket.emit('KICK_USER', { roomId: room.id, userId: me.id, userIdToKick: userId }, data => {
+          console.log('KICK_USER', data)
 
-    lockButton.addEventListener("click", () => {
-      socket.emit("TOGGLE_ROOM_LOCKED_STATE", { userId: window.me.id, roomId: window.room.id }, data => {
-        lockButton.innerText = data.room.isLocked ? 'Unlock' : 'Lock'
+          setRoom(data.room)
+          setUsers(data.users)
+        });
+      }
 
-        if (data.me) window.me = data.me
-        if (data.room) window.room = data.room
-        if (data.users) window.users = data.users
+      const onLeaveRoom = () => {
+        socket.emit('LEAVE_ROOM', { roomId: room.id, userId: me.id }, data => {
+          console.log('LEAVE_ROOM', data)
 
-        updatePayload()
-        updateMembers()
-      })
-    })
+          setRoom({})
+          setUsers([])
+          setInRoom(false)
+        });
+      }
 
-    resetButton.addEventListener("click", () => {
-      socket.emit("RESTART_GAME", { user: window.me, roomId: window.room.id }, data => {
-        if (data.me) window.me = data.me
-        if (data.room) window.room = data.room
-        if (data.users) window.users = data.users
+      const onClickMakeHost = (userId) => {
+        socket.emit('PASS_ROOM_OWNERSHIP', { newHostId: userId, roomId: room.id, userId: me.id }, data => {
+          console.log('PASS_ROOM_OWNERSHIP', data)
 
-        updatePayload()
-        updateMembers()
-      })
-    })
+          setRoom(data.room)
+          setUsers(data.users)
+        });
+      }
 
-    leaveButton.addEventListener("click", () => {
-      socket.emit('LEAVE_ROOM', { roomId: window.room.id, userId: window.me.id }, data => {
-        if (data.me) window.me = data.me
-        if (data.room) window.room = data.room
-        if (data.users) window.users = data.users
-        updatePayload()
 
-        onboardingContainer.style.display = "block"
-        roomContainer.style.display = "none"
-      });
-    })
+      return (<div>
+        <h1>NestJS Websocket Starter</h1>
+        <div>{isConnected ? "Connected" : "Disconnected"}</div>
+        {inRoom ? <RoomContainer me={me} onClickKick={onClickKick} onClickLeave={onLeaveRoom} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} room={room} users={users} /> : <KickoffContainer onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />}
+      </div>)
+    }
+
+    const KickoffContainer = ({ onCreateRoom, onJoinRoom }) => {
+      const userData = getUserData()
+      const [name, setName] = useState(userData.name ?? "")
+      const [maxUsers, setMaxUsers] = useState("")
+      const [roomCode, setRoomCode] = useState("")
+      const isValidName = /^[a-zA-Z ]{2,}$/.test(name)
+      const isValidRoomCode = /^[A-Z0-9]{4}$/.test(roomCode)
+      const isValidUsers = !maxUsers || /^\d{1,2}$/.test(maxUsers)
+
+      const handleRoomCodeChange = (event) => {
+        const value = event.target.value;
+        setRoomCode(value.toUpperCase());
+      };
+
+      const handleMaxUsersChange = (event) => {
+        const value = event.target.value;
+
+        if (!value) {
+          setMaxUsers("")
+        }
+
+        const valueAsNumber = Number(value)
+
+        if (value.length > 1 && (valueAsNumber > 20)) return
+
+        setMaxUsers(valueAsNumber)
+      }
+
+      const userId = userData.id ?? undefined
+
+      const onClickCreateRoom = () => onCreateRoom({ maxUsers, name, userId })
+      const onClickJoinRoom = () => onJoinRoom({ name, roomCode, userId })
+      const onSubmit = (e) => e.preventDefault()
+
+      return (<form onSubmit={onSubmit}>
+        <input onChange={(e) => setName(e.target.value)} maxLength={20} minLength={2} placeholder="Enter your name" value={name} />
+        <input onChange={handleMaxUsersChange} pattern="^\d{1,2}$" placeholder="Maximum users" value={maxUsers} />
+        <button disabled={!isValidName || !isValidUsers} onClick={onClickCreateRoom}>Create room</button>
+        <input maxLength={4} minLength={4} onChange={handleRoomCodeChange} pattern="^[A-Z0-9]{4}$" placeholder="Enter a room code" value={roomCode} />
+        <button disabled={!isValidName || !isValidRoomCode || !isValidUsers} onClick={onClickJoinRoom}>Join room</button>
+      </form>)
+    }
+
+    const RoomMembers = ({ hostId, me, onClickKick, onClickLeave, onClickMakeHost, users }) => {
+      const isHost = hostId === me?.id
+      return (<table><tbody>{users.map((user) => (<tr key={user.id}>
+        <td>{user.name} ({user.status}) ({hostId === user.id ? "Host" : "Participant"})</td>
+        {isHost && hostId !== user.id && <>
+          <td><button onClick={() => onClickMakeHost(user.id)}>Make host</button></td>
+          <td><button onClick={() => onClickKick(user.id)}>Kick</button></td>
+        </>
+        }
+        {
+          user.id === me.id &&
+          <>
+            <td></td>
+            <td>{<button onClick={onClickLeave}>Leave</button>}</td>
+          </>
+        }
+      </tr>)
+      )}</tbody></table>)
+    }
+
+    const RoomContainer = ({ me, onClickKick, onClickLeave, onClickMakeHost, onClickToggleLock, room, users }) => {
+      return <>
+        <h1>Room code: {room.id}</h1>
+        {room.hostId === me.id && <button onClick={onClickToggleLock}>{room.isLocked ? "Unlock" : "Lock"} room</button>}
+        <RoomMembers hostId={room.hostId} me={me} onClickKick={onClickKick} onClickLeave={onClickLeave} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} users={users} />
+      </>
+    }
+
+    ReactDOM.render(<Container />, document.getElementById("root"));
   </script>
+
+  <!-- This is what supports JSX compilation (and other transformations) -->
+  <script src="https://unpkg.com/@babel/standalone@7.10.3/babel.min.js"></script>
+
+  <!-- These are for React -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.development.js"></script>
 </body>
 
 </html>

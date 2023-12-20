@@ -30,14 +30,14 @@ export class UsersService {
         return userIds.map((userId) => this.getUserById(userId));
     }
 
-    getOrCreateUser(user: UserInput) {
+    getOrCreateUser(user: UserInput, socketId: string) {
         const existingUser = this.getUserById(user?.id);
 
         if (!existingUser) {
-            return this.createUser({ name: user.name, socketId: user.socketId });
+            return this.createUser({ name: user.name, socketId });
         }
 
-        this.usersStore.updateSocket(user.socketId, user.id);
+        this.usersStore.updateSocket(socketId, user.id);
 
         const updatedUser = this.usersStore.updateUser(user.id, {
             name: user.name,

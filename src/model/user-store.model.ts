@@ -4,6 +4,7 @@ export interface UserStoreModel {
     createdAt: Date;
     id: string;
     name: string;
+    socketId: string;
     status: LikeUserStatus;
     updatedAt: Date;
 }
