@@ -1,20 +1,27 @@
-import { Controller, Get, NotFoundException, Param } from "@nestjs/common";
+import {
+    Controller,
+    Get,
+    NotFoundException,
+    Param,
+    UsePipes,
+    ValidationPipe,
+} from "@nestjs/common";
 
-import { SuccessModel } from "../model/success.model";
 import { RoomsService } from "./rooms.service";
 
+@UsePipes(new ValidationPipe())
 @Controller("rooms")
 export class RoomsController {
     constructor(private readonly roomsService: RoomsService) {}
 
     @Get(":id")
-    getRoom(@Param("id") id: string): SuccessModel {
-        const result = this.roomsService.findRoomById(id);
+    getRoom(@Param("id") id: string) {
+        const room = this.roomsService.findRoomById(id);
 
-        if (!result.success) {
-            throw new NotFoundException(result.message);
+        if (!room) {
+            throw new NotFoundException("No room found matching ID");
         }
 
-        return { success: true };
+        return room;
     }
 }

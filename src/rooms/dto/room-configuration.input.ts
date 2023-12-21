@@ -9,5 +9,5 @@ export class RoomConfigurationInput {
     @Max(20)
     @Min(2)
     @IsNumber()
-    maxUsers?: number;
+    maxMembers?: number;
 }

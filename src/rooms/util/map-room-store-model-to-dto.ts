@@ -11,7 +11,7 @@ export const mapRoomStoreModelToDto = (room: RoomStoreModel): RoomDtoModel => {
         hostId: room.hostId,
         id: room.id,
         isLocked: room.isLocked,
-        maxUsers: room.maxUsers,
+        maxMembers: room.maxMembers,
         updatedAt: room.updatedAt,
     };
 

@@ -1,4 +1,3 @@
-import { UseFilters, UsePipes, ValidationPipe } from "@nestjs/common";
 import type { OnGatewayDisconnect } from "@nestjs/websockets";
 import {
     ConnectedSocket,
@@ -10,18 +9,28 @@ import {
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
 import { UserStatus } from "src/model/enum/user-status.enum";
+import type {
+    RoomExitedEvent,
+    RoomMembersUpdatedEvent,
+    RoomUpdatedEvent,
+} from "src/model/events/room.event";
+import {
+    EventOperation,
+    type RoomEvents,
+    RoomExitedReason,
+    type RoomJoinedEvent,
+} from "src/model/events/room.event";
 import { KickUserInput } from "src/rooms/dto/kick-user.input";
 import { UsersService } from "src/users/users.service";
 
-import { BadRequestTransformationFilter } from "../filters/bad-request-exception-transformation.filter";
 import { CreateRoomInput } from "../rooms/dto/create-room.input";
 import { JoinRoomInput } from "../rooms/dto/join-room.input";
 import { LeaveRoomInput } from "../rooms/dto/leave-room.input";
 import { PassRoomOwnershipInput } from "../rooms/dto/pass-room-ownership.input";
-import { ToggleLockRoomInput } from "../rooms/dto/toggle-lock-room.input";
+import { UpdateRoomInput } from "../rooms/dto/update-room.input";
 import { RoomsService } from "../rooms/rooms.service";
+import { EventsMessages } from "./events.messages";
 
-@UseFilters(BadRequestTransformationFilter)
 @WebSocketGateway({
     cors: {
         origin: "*",
@@ -40,31 +49,38 @@ export class EventsGateway implements OnGatewayDisconnect {
         this.logger.setContext(this.constructor.name);
     }
 
-    private broadcastUpdate(socket: Socket, roomId: string, payload: unknown) {
-        return socket.broadcast.to(roomId).emit("event", JSON.stringify(payload));
+    private broadcast(socket: Socket, roomId: string, payload: RoomEvents) {
+        return socket.broadcast.to(roomId).emit("event", payload);
     }
 
-    @UsePipes(new ValidationPipe())
-    @SubscribeMessage("CREATE_ROOM")
+    @SubscribeMessage(EventsMessages.CreateRoom)
     async handleCreateRoomMessage(
         @ConnectedSocket()
         socket: Socket,
         @MessageBody()
         input: CreateRoomInput,
-    ) {
+    ): Promise<RoomJoinedEvent> {
         const user = this.usersService.getOrCreateUser(input.user, socket.id);
         const room = this.roomsService.createRoom(input.room, user.id);
+        const userIds = this.roomsService.getUserIdsForRoom(room.id);
+        const members = this.usersService.getUsersById(userIds);
 
         await socket.join(room.id);
 
-        const userIds = this.roomsService.getUserIdsForRoom(room.id);
-        const usersInRoom = this.usersService.getUsersById(userIds);
+        const event: RoomJoinedEvent = {
+            operation: EventOperation.RoomJoined,
+            data: {
+                me: user,
+                roomId: room.id,
+                room,
+                members,
+            },
+        };
 
-        return { me: user, room, users: usersInRoom };
+        return event;
     }
 
-    @UsePipes(new ValidationPipe())
-    @SubscribeMessage("JOIN_ROOM")
+    @SubscribeMessage(EventsMessages.JoinRoom)
     async handleJoinRoomMessage(
         @ConnectedSocket()
         socket: Socket,
@@ -74,82 +90,34 @@ export class EventsGateway implements OnGatewayDisconnect {
         const user = this.usersService.getOrCreateUser(input.user, socket.id);
 
         const room = this.roomsService.joinRoom(input.roomId, user.id);
-
         const userIds = this.roomsService.getUserIdsForRoom(room.id);
-        const usersInRoom = this.usersService.getUsersById(userIds);
+        const members = this.usersService.getUsersById(userIds);
+
+        const roomMembersUpdatedEvent: RoomMembersUpdatedEvent = {
+            operation: EventOperation.RoomMembersUpdated,
+            data: {
+                roomId: room.id,
+                members,
+            },
+        };
 
         await socket.join(room.id);
-        await this.broadcastUpdate(socket, room.id, { room, users: usersInRoom });
+        await this.broadcast(socket, room.id, roomMembersUpdatedEvent);
 
-        return { me: user, room, users: usersInRoom };
+        const event: RoomJoinedEvent = {
+            operation: EventOperation.RoomJoined,
+            data: {
+                me: user,
+                roomId: room.id,
+                room,
+                members,
+            },
+        };
+
+        return event;
     }
 
-    @UsePipes(new ValidationPipe())
-    @SubscribeMessage("LEAVE_ROOM")
-    async handleLeaveRoomMessage(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: LeaveRoomInput,
-    ) {
-        const { roomId, userId } = input;
-        const room = this.roomsService.leaveRoom(roomId, userId);
-
-        if (!room) {
-            await socket.in(roomId).socketsLeave(roomId);
-            return true;
-        }
-
-        const userIds = this.roomsService.getUserIdsForRoom(roomId);
-        const usersInRoom = this.usersService.getUsersById(userIds);
-
-        const payload = { room, users: usersInRoom };
-
-        await socket.leave(roomId);
-        await this.broadcastUpdate(socket, roomId, payload);
-
-        return payload;
-    }
-
-    @UsePipes(new ValidationPipe())
-    @SubscribeMessage("TOGGLE_ROOM_LOCKED_STATE")
-    async handleLockRoomMessage(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: ToggleLockRoomInput,
-    ) {
-        const room = this.roomsService.toggleRoomLockedState(input.roomId, input.userId);
-        const userIds = this.roomsService.getUserIdsForRoom(room.id);
-        const usersInRoom = this.usersService.getUsersById(userIds);
-
-        const payload = { room, users: usersInRoom };
-
-        await this.broadcastUpdate(socket, room.id, payload);
-
-        return payload;
-    }
-
-    @UsePipes(new ValidationPipe())
-    @SubscribeMessage("PASS_ROOM_OWNERSHIP")
-    async handlePassedOwnershipMessage(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: PassRoomOwnershipInput,
-    ) {
-        const room = this.roomsService.passRoomOwnership(input);
-        const userIds = this.roomsService.getUserIdsForRoom(room.id);
-        const usersInRoom = this.usersService.getUsersById(userIds);
-        const payload = { room, users: usersInRoom };
-
-        await this.broadcastUpdate(socket, room.id, payload);
-
-        return payload;
-    }
-
-    @UsePipes(new ValidationPipe())
-    @SubscribeMessage("KICK_USER")
+    @SubscribeMessage(EventsMessages.KickUserFromRoom)
     async handleKickUser(
         @ConnectedSocket()
         socket: Socket,
@@ -160,15 +128,139 @@ export class EventsGateway implements OnGatewayDisconnect {
         const room = this.roomsService.kickUserFromRoom(roomId, userId, userIdToKick);
         const userIds = this.roomsService.getUserIdsForRoom(roomId);
         const usersInRoom = this.usersService.getUsersById(userIds);
-        const payload = { room, users: usersInRoom };
 
         const kickedUser = this.usersService.getUserById(userIdToKick);
 
-        await this.server.in(kickedUser.socketId).socketsLeave(roomId);
-        await socket.to(kickedUser.socketId).emit("event", JSON.stringify({ kicked: true }));
-        await this.broadcastUpdate(socket, roomId, payload);
+        if (!room) {
+            const event: RoomExitedEvent = {
+                operation: EventOperation.RoomExited,
+                data: {
+                    reason: RoomExitedReason.RoomClosed,
+                    roomId,
+                },
+            };
 
-        return payload;
+            await this.broadcast(socket, roomId, event);
+            await socket.in(roomId).socketsLeave(roomId);
+
+            return event;
+        }
+
+        const roomKickedEvent: RoomExitedEvent = {
+            operation: EventOperation.RoomExited,
+            data: {
+                reason: RoomExitedReason.Kicked,
+                roomId,
+            },
+        };
+
+        const roomUpdatedEvent: RoomUpdatedEvent = {
+            operation: EventOperation.RoomUpdated,
+            data: {
+                roomId,
+                room,
+                members: usersInRoom,
+            },
+        };
+
+        await this.server.to(kickedUser.socketId).emit("event", roomKickedEvent);
+        await this.server.in(kickedUser.socketId).socketsLeave(roomId);
+
+        await this.broadcast(socket, room.id, roomUpdatedEvent);
+
+        return roomUpdatedEvent;
+    }
+
+    @SubscribeMessage(EventsMessages.LeaveRoom)
+    async handleLeaveRoomMessage(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: LeaveRoomInput,
+    ) {
+        const { roomId, userId } = input;
+        const room = this.roomsService.leaveRoom(roomId, userId);
+
+        const roomClosedEvent: RoomExitedEvent = {
+            operation: EventOperation.RoomExited,
+            data: {
+                reason: RoomExitedReason.RoomClosed,
+                roomId,
+            },
+        };
+        const roomLeftEvent: RoomExitedEvent = {
+            operation: EventOperation.RoomExited,
+            data: {
+                reason: RoomExitedReason.Left,
+                roomId,
+            },
+        };
+
+        if (!room) {
+            await this.broadcast(socket, roomId, roomClosedEvent);
+            await socket.in(roomId).socketsLeave(roomId);
+            return roomLeftEvent;
+        }
+
+        const userIds = this.roomsService.getUserIdsForRoom(roomId);
+        const usersInRoom = this.usersService.getUsersById(userIds);
+
+        const roomUpdatedEvent: RoomUpdatedEvent = {
+            operation: EventOperation.RoomUpdated,
+            data: {
+                roomId,
+                room,
+                members: usersInRoom,
+            },
+        };
+
+        await this.broadcast(socket, roomId, roomUpdatedEvent);
+        await socket.leave(room.id);
+        return roomLeftEvent;
+    }
+
+    @SubscribeMessage(EventsMessages.PassRoomOwnership)
+    async handlePassedOwnershipMessage(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: PassRoomOwnershipInput,
+    ) {
+        const room = this.roomsService.passRoomOwnership(input);
+
+        const roomUpdatedEvent: RoomUpdatedEvent = {
+            operation: EventOperation.RoomUpdated,
+            data: {
+                roomId: room.id,
+                room,
+            },
+        };
+
+        await this.broadcast(socket, room.id, roomUpdatedEvent);
+
+        return roomUpdatedEvent;
+    }
+
+    @SubscribeMessage(EventsMessages.UpdateRoom)
+    async handleLockRoomMessage(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: UpdateRoomInput,
+    ) {
+        const room = this.roomsService.updateRoom(input);
+
+        const roomUpdatedEvent: RoomUpdatedEvent = {
+            operation: EventOperation.RoomUpdated,
+            data: {
+                roomId: room.id,
+                room,
+            },
+        };
+
+        await this.broadcast(socket, room.id, roomUpdatedEvent);
+
+        return roomUpdatedEvent;
     }
 
     async handleDisconnect(socket: Socket) {
@@ -191,7 +283,14 @@ export class EventsGateway implements OnGatewayDisconnect {
         const broadcasts = rooms.map((room) => {
             const userIds = this.roomsService.getUserIdsForRoom(room.id);
             const usersInRoom = this.usersService.getUsersById(userIds);
-            return this.broadcastUpdate(socket, room.id, { room, users: usersInRoom });
+            const event: RoomMembersUpdatedEvent = {
+                operation: EventOperation.RoomMembersUpdated,
+                data: {
+                    members: usersInRoom,
+                    roomId: room.id,
+                },
+            };
+            return this.broadcast(socket, room.id, event);
         });
 
         await Promise.all(broadcasts);

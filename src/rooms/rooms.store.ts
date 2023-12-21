@@ -1,29 +1,25 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
 
-import { ConfigService } from "../config/config.service";
 import type { RoomStoreModel } from "../model/room-store.model";
 import { generateRoomId } from "./util/generate-room-id";
 
 type CreateRoomInput = {
     hostId: string;
     isLocked?: boolean;
-    maxUsers?: number;
+    maxMembers?: number;
 };
 
 type UpdateRoomInput = {
     isLocked?: boolean;
-    maxUsers?: number;
+    maxMembers?: number;
 };
 
 @Injectable()
 export class RoomsStore {
     private rooms: Map<string, RoomStoreModel> = new Map();
 
-    constructor(
-        private configService: ConfigService,
-        private readonly logger: PinoLogger,
-    ) {
+    constructor(private readonly logger: PinoLogger) {
         this.logger.setContext(this.constructor.name);
     }
 
@@ -43,16 +39,19 @@ export class RoomsStore {
         const createdAt = new Date();
         const id = this.generateUniqueRoomId();
 
-        const { hostId, isLocked, maxUsers } = input;
+        const { hostId, isLocked, maxMembers } = input;
+
+        const users = new Set([hostId]);
 
         const room: RoomStoreModel = {
             createdAt,
             hostId,
             id,
+            isFull: maxMembers && users.size >= maxMembers,
             isLocked: isLocked ?? false,
-            maxUsers: maxUsers ?? 0,
+            maxMembers: maxMembers ?? 0,
             updatedAt: createdAt,
-            users: new Set([hostId]),
+            users,
         };
 
         this.rooms.set(id, room);
@@ -72,7 +71,7 @@ export class RoomsStore {
         const updatedRoom: RoomStoreModel = {
             ...room,
             isLocked: updates.isLocked ?? room.isLocked,
-            maxUsers: updates.maxUsers ?? room.maxUsers,
+            maxMembers: updates.maxMembers ?? room.maxMembers,
             updatedAt: new Date(),
         };
 
@@ -124,6 +123,7 @@ export class RoomsStore {
 
         this.rooms.set(roomId, {
             ...room,
+            isFull: room.maxMembers && room.users.size >= room.maxMembers,
             updatedAt: new Date(),
         });
 

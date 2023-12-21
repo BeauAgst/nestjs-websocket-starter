@@ -2,8 +2,9 @@ export interface RoomStoreModel {
     createdAt: Date;
     hostId: string;
     id: string;
+    isFull: boolean;
     isLocked: boolean;
-    maxUsers: number | null;
+    maxMembers: number;
     updatedAt: Date;
     users: Set<string>;
 }

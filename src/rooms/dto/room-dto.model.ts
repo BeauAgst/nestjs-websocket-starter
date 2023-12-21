@@ -14,7 +14,7 @@ export class RoomDtoModel {
     isLocked: boolean;
 
     @Expose()
-    maxUsers?: number;
+    maxMembers?: number;
 
     @Expose()
     updatedAt: Date;

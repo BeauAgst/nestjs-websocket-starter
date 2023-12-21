@@ -4,13 +4,14 @@ import {
     NotFoundException,
     UnauthorizedException,
 } from "@nestjs/common";
+import { ValidationError } from "class-validator";
 import { PinoLogger } from "nestjs-pino";
 
 import type { RoomStoreModel } from "../model/room-store.model";
-import type { SuccessModel } from "../model/success.model";
 import type { PassRoomOwnershipInput } from "./dto/pass-room-ownership.input";
 import type { RoomConfigurationInput } from "./dto/room-configuration.input";
 import type { RoomDtoModel } from "./dto/room-dto.model";
+import type { UpdateRoomInput } from "./dto/update-room.input";
 import { RoomsStore } from "./rooms.store";
 import { UserRoomsStore } from "./user-rooms.store";
 import { mapRoomStoreModelToDto } from "./util/map-room-store-model-to-dto";
@@ -36,21 +37,13 @@ export class RoomsService {
         return room.users.has(userId);
     }
 
-    private isRoomFull(room: RoomStoreModel) {
-        return room.maxUsers && room.users.size >= room.maxUsers;
-    }
-
-    private isRoomLocked(room: RoomStoreModel) {
-        return room.isLocked;
-    }
-
     createRoom(config: RoomConfigurationInput, userId: string): RoomDtoModel {
         this.logger.info({ userId: userId }, "Creating room");
 
         const room = this.roomsStore.createRoom({
             hostId: userId,
             isLocked: config.isLocked,
-            maxUsers: config.maxUsers,
+            maxMembers: config.maxMembers,
         });
 
         this.userRoomsStore.addRoomToUser(userId, room.id);
@@ -58,7 +51,7 @@ export class RoomsService {
         return mapRoomStoreModelToDto(room);
     }
 
-    findRoomById(roomId: string): SuccessModel {
+    findRoomById(roomId: string): RoomDtoModel {
         this.logger.info({ roomId }, "Finding room");
 
         const room = this.roomsStore.getRoomById(roomId);
@@ -66,16 +59,16 @@ export class RoomsService {
         if (!room) {
             const message = "No room found matching this ID";
             this.logger.info({ roomId }, message);
-            return { message, success: false };
+            return null;
         }
 
-        if (this.isRoomFull(room)) {
+        if (room.isFull) {
             const message = "This room is full";
             this.logger.info({ roomId }, message);
-            return { message, success: false };
+            return null;
         }
 
-        return { success: true };
+        return mapRoomStoreModelToDto(room);
     }
 
     getUserIdsForRoom(roomId: string): string[] {
@@ -117,13 +110,13 @@ export class RoomsService {
             return mapRoomStoreModelToDto(room);
         }
 
-        if (this.isRoomFull(room)) {
+        if (room.isFull) {
             const message = "Room is full";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
         }
 
-        if (this.isRoomLocked(room)) {
+        if (room.isLocked) {
             const message = "Room is locked";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
@@ -136,7 +129,7 @@ export class RoomsService {
         return mapRoomStoreModelToDto(joinedRoom);
     }
 
-    leaveRoom(roomId: string, userId: string): RoomDtoModel | boolean {
+    leaveRoom(roomId: string, userId: string): RoomDtoModel {
         const room = this.roomsStore.getRoomById(roomId);
 
         if (!room) {
@@ -154,7 +147,7 @@ export class RoomsService {
         if (this.isUserAloneInRoom(room, userId)) {
             this.logger.info({ roomId, userId }, "No users left in room, deleting");
             this.roomsStore.deleteRoom(roomId);
-            return true;
+            return null;
         }
 
         if (this.isUserHostOfRoom(room, userId)) {
@@ -172,6 +165,33 @@ export class RoomsService {
         return mapRoomStoreModelToDto(updatedRoom);
     }
 
+    updateRoom(input: UpdateRoomInput): RoomDtoModel {
+        const { roomId, updates, userId } = input;
+        const room = this.roomsStore.getRoomById(roomId);
+
+        if (!room) {
+            const message = "Room with ID does not exist";
+            this.logger.info({ roomId, userId }, message);
+            throw new NotFoundException(message);
+        }
+
+        if (!this.isUserHostOfRoom(room, userId)) {
+            const message = "User does not have permission to configure the room";
+            this.logger.info({ roomId, userId }, message);
+            throw new UnauthorizedException(message);
+        }
+
+        if (room.isFull) {
+            const message = "Cannot set maximum users to less than the current member count";
+            this.logger.info({ roomId, userId }, message);
+            throw new ValidationError();
+        }
+
+        const updatedRoom = this.roomsStore.updateRoom(roomId, updates);
+
+        return mapRoomStoreModelToDto(updatedRoom);
+    }
+
     toggleRoomLockedState(roomId: string, userId: string): RoomDtoModel {
         const room = this.roomsStore.getRoomById(roomId);
 
@@ -181,8 +201,8 @@ export class RoomsService {
             throw new NotFoundException(message);
         }
 
-        if (room.hostId !== userId) {
-            const message = "User is not host and cannot toggle room locked state";
+        if (!this.isUserHostOfRoom(room, userId)) {
+            const message = "User does not have permission to toggle room locked state";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
         }
@@ -198,7 +218,7 @@ export class RoomsService {
         const { userId, newHostId, roomId } = input;
         const room = this.roomsStore.getRoomById(roomId);
 
-        if (room.hostId !== userId) {
+        if (!this.isUserHostOfRoom(room, userId)) {
             const message = "User does not have permission to pass room ownership";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
@@ -215,10 +235,16 @@ export class RoomsService {
         return mapRoomStoreModelToDto(updatedRoom);
     }
 
-    kickUserFromRoom(roomId: string, userId: string, userIdToKick: string): RoomDtoModel | boolean {
+    kickUserFromRoom(roomId: string, userId: string, userIdToKick: string): RoomDtoModel {
         const room = this.roomsStore.getRoomById(roomId);
 
-        if (room.hostId !== userId) {
+        if (!room) {
+            const message = "Room with ID does not exist";
+            this.logger.info({ roomId, userId }, message);
+            throw new NotFoundException(message);
+        }
+
+        if (!this.isUserHostOfRoom(room, userId)) {
             const message = "User does not have permission to kick other users";
             this.logger.info({ roomId, userId }, message);
             throw new UnauthorizedException(message);
