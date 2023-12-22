@@ -23,12 +23,17 @@
       return {}
     }
 
+    const setUserData = (user) => localStorage.setItem("user", JSON.stringify(user))
+
     const Container = () => {
+      // setUserData({ id: "65858a54e59716ad3a827b74", name: "Beau" })
+      const userData = getUserData()
       const [inRoom, setInRoom] = useState(false)
       const [isConnected, setIsConnected] = useState(socket.connected);
       const [me, setMe] = useState({});
       const [room, setRoom] = useState({});
-      const [users, setUsers] = useState([]);
+      const [members, setMembers] = useState([]);
+
 
       useEffect(() => {
         onConnect = () => setIsConnected(true);
@@ -40,13 +45,13 @@
 
           switch (operation) {
             case "room_members/updated":
-              if (data.room) setRoom(data.room)
-              if (data.members) setUsers(data.members)
+              setRoom(data.room)
+              setMembers(data.room.members)
               break;
             case "room/exited":
               setInRoom(false)
               setRoom({})
-              setUsers([])
+              setMembers([])
               alert(`You have left the room. Reason: ${data.reason}`)
               break;
           }
@@ -73,64 +78,64 @@
         socket.emit('room.create', payload, response => {
           console.log(`[response:${event}]`, response);
 
-          const { me, members, room } = response.data
+          const { room } = response.data
 
-          localStorage.setItem("user", JSON.stringify(me))
-
-          setMe(me)
-          setUsers(members)
+          setMembers(room.members)
           setRoom(room)
           setInRoom(true)
         });
       }
 
-      const onJoinRoom = ({ name, roomCode, userId }) => {
-        const event = "room.join"
-        const payload = { roomId: roomCode, user: { id: userId, name } }
-        console.log(`[triggered:${event}]`, payload)
-        socket.emit(event, payload, response => {
+      const onJoinRoom = ({ memberId, roomCode }) => {
+        const event = "room.connect"
+        console.log(`[triggered:${event}]`)
+        socket.emit(event, { memberId, roomCode }, response => {
           console.log(`[response:${event}]`, response);
 
-          const { me, members, room } = response.data
+          const { room } = response.data
 
-          localStorage.setItem("user", JSON.stringify(me))
-
-          setMe(me)
           setRoom(room)
-          setUsers(members)
+          setMembers(room.members)
           setInRoom(true)
         });
       }
 
       const onClickToggleLock = () => {
-        socket.emit("TOGGLE_ROOM_LOCKED_STATE", { userId: me.id, roomId: room.id }, data => {
-          console.log('TOGGLE_LOCK_ROOM', data)
+        const event = "room.lock"
+        console.log(`[triggered:${event}]`)
+        socket.emit(event, { roomCode: room.code, secret: localStorage.getItem("secret") }, response => {
+          console.log(`[response:${event}]`, response);
 
-          setRoom(data.room)
-          setUsers(data.users)
+          const { room } = response.data
+
+          setRoom(room)
+          setMembers(room.members)
         })
       }
 
       const onClickKick = (userId) => {
         const event = "room.kick_user"
-        const payload = { roomId: room.id, userId: me.id, userIdToKick: userId }
+        const payload = { roomCode: room.code, secret: localStorage.getItem("secret"), socketIdToKick: userId }
         console.log(`[triggered:${event}]`, payload)
         socket.emit(event, payload, response => {
           console.log(`[response:${event}]`, response);
 
-          const { members, room } = response.data
+          const { room } = response.data
 
-          if (room) setRoom(room)
-          if (members) setUsers(members)
+          setRoom(room)
+          setMembers(room.members)
         });
       }
 
       const onLeaveRoom = () => {
-        socket.emit('room.leave', { roomId: room.id, userId: me.id }, data => {
-          console.log('room.leave', data)
+        const event = "room.leave"
+        const payload = { roomCode: room.code }
+        console.log(`[triggered:${event}]`, payload)
+        socket.emit(event, payload, response => {
+          console.log(`[response:${event}]`, response);
 
           setRoom({})
-          setUsers([])
+          setMembers([])
           setInRoom(false)
         });
       }
@@ -153,7 +158,7 @@
       return (<div>
         <h1>NestJS Websocket Starter</h1>
         <div>{isConnected ? "Connected" : "Disconnected"}</div>
-        {inRoom ? <RoomContainer me={me} onClickKick={onClickKick} onClickLeave={onLeaveRoom} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} room={room} users={users} /> : <KickoffContainer onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />}
+        {inRoom ? <RoomContainer me={userData} onClickKick={onClickKick} onClickLeave={onLeaveRoom} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} room={room} members={members} /> : <KickoffContainer onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />}
       </div>)
     }
 
@@ -185,34 +190,34 @@
         setMaxUsers(valueAsNumber)
       }
 
-      const userId = userData.id ?? undefined
+      const memberId = userData.id ?? undefined
 
       const onClickCreateRoom = () => {
         localStorage.setItem("roomCode", roomCode)
-        onCreateRoom({ maxMembers, name, userId })
+        onCreateRoom({ maxMembers, name, memberId })
       }
       const onClickJoinRoom = () => {
         localStorage.setItem("roomCode", roomCode)
-        onJoinRoom({ name, roomCode, userId })
+        onJoinRoom({ roomCode, memberId })
       }
       const onSubmit = (e) => e.preventDefault()
 
       return (<form onSubmit={onSubmit}>
         <input onChange={(e) => setName(e.target.value)} maxLength={20} minLength={2} placeholder="Enter your name" value={name} />
-        <input onChange={handleMaxUsersChange} pattern="^\d{1,2}$" placeholder="Maximum users" value={maxMembers} />
+        <input onChange={handleMaxUsersChange} pattern="^\d{1,2}$" placeholder="Maximum members" value={maxMembers} />
         <button disabled={!isValidName || !isValidUsers} onClick={onClickCreateRoom}>Create room</button>
         <input maxLength={4} minLength={4} onChange={handleRoomCodeChange} pattern="^[A-Z0-9]{4}$" placeholder="Enter a room code" value={roomCode} />
         <button disabled={!isValidName || !isValidRoomCode || !isValidUsers} onClick={onClickJoinRoom}>Join room</button>
       </form>)
     }
 
-    const RoomMembers = ({ hostId, me, onClickKick, onClickLeave, onClickMakeHost, users }) => {
-      return (<table><tbody>{users.map((user) => (<tr key={user.id}>
-        <td>{user.name} ({user.status}) ({hostId === user.id ? "Host" : "Participant"})</td>
-        <td><button onClick={() => onClickMakeHost(user.id)}>Make host</button></td>
-        <td><button onClick={() => onClickKick(user.id)}>Kick</button></td>
+    const RoomMembers = ({ hostId, me, onClickKick, onClickLeave, onClickMakeHost, members }) => {
+      return (<table><tbody>{members.map((member) => (<tr key={member.socketId}>
+        <td>{member.name} ({member.status}) ({hostId === member.socketId ? "Host" : "Participant"})</td>
+        <td><button onClick={() => onClickMakeHost(member.socketId)}>Make host</button></td>
+        <td><button onClick={() => onClickKick(member.socketId)}>Kick</button></td>
         {
-          user.id === me.id &&
+          member.id === me.id &&
           <>
             <td>{<button onClick={onClickLeave}>Leave</button>}</td>
           </>
@@ -221,11 +226,12 @@
       )}</tbody></table>)
     }
 
-    const RoomContainer = ({ me, onClickKick, onClickLeave, onClickMakeHost, onClickToggleLock, room, users }) => {
+    const RoomContainer = ({ me, onClickKick, onClickLeave, onClickMakeHost, onClickToggleLock, room, members }) => {
       return <>
-        <h1>Room code: {room.id}</h1>
-        {room.hostId === me.id && <button onClick={onClickToggleLock}>{room.isLocked ? "Unlock" : "Lock"} room</button>}
-        <RoomMembers hostId={room.hostId} me={me} onClickKick={onClickKick} onClickLeave={onClickLeave} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} users={users} />
+        <h1>Room code: {room.code}</h1>
+        <button onClick={onClickToggleLock}>{room.isLocked ? "Unlock" : "Lock"} room</button>
+        <button onClick={onClickLeave}>Leave room</button>
+        <RoomMembers hostId={room.hostId} me={me} onClickKick={onClickKick} onClickLeave={onClickLeave} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} members={members} />
       </>
     }
 

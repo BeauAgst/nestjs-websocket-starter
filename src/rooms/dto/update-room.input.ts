@@ -8,15 +8,15 @@ import {
     ValidateNested,
 } from "class-validator";
 
-import { ROOM_ID_LENGTH } from "../util/constants";
+import { ROOM_CODE_LENGTH } from "../util/constants";
 import { RoomConfigurationInput } from "./room-configuration.input";
 
 export class UpdateRoomInput {
-    @Length(ROOM_ID_LENGTH, ROOM_ID_LENGTH)
+    @Length(ROOM_CODE_LENGTH, ROOM_CODE_LENGTH)
     @IsUppercase()
     @IsAlphanumeric()
     @IsString()
-    roomId: string;
+    roomCode: string;
 
     @ValidateNested()
     @Type(() => RoomConfigurationInput)

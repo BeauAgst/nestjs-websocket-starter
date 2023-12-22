@@ -1,14 +1,11 @@
-import { IsAlphanumeric, IsString, IsUppercase, IsUUID, Length } from "class-validator";
+import { IsAlphanumeric, IsString, IsUppercase, Length } from "class-validator";
 
-import { ROOM_ID_LENGTH } from "../util/constants";
+import { ROOM_CODE_LENGTH } from "../util/constants";
 
 export class LeaveRoomInput {
-    @Length(ROOM_ID_LENGTH, ROOM_ID_LENGTH)
+    @Length(ROOM_CODE_LENGTH, ROOM_CODE_LENGTH)
     @IsUppercase()
     @IsAlphanumeric()
     @IsString()
-    roomId: string;
-
-    @IsUUID()
-    userId: string;
+    roomCode: string;
 }

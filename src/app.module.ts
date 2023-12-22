@@ -1,16 +1,20 @@
 import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
 import { LoggerModule } from "nestjs-pino";
 
 import { ConfigModule } from "./config/config.module";
 import { EventsModule } from "./events/events.module";
 import { RoomsModule } from "./rooms/rooms.module";
-import { UsersModule } from "./users/users.module";
-import { IsUserRoomHost } from "./validators/is-user-room-host.validator";
 
-const VALIDATORS = [IsUserRoomHost];
 @Module({
-    imports: [ConfigModule, LoggerModule.forRoot(), EventsModule, RoomsModule, UsersModule],
+    imports: [
+        MongooseModule.forRoot("mongodb://localhost:27017/test"),
+        ConfigModule,
+        LoggerModule.forRoot(),
+        EventsModule,
+        RoomsModule,
+    ],
     controllers: [],
-    providers: [...VALIDATORS],
+    providers: [],
 })
 export class AppModule {}

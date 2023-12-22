@@ -6,12 +6,11 @@ import {
     UnauthorizedException,
 } from "@nestjs/common";
 import { BaseWsExceptionFilter, WsException } from "@nestjs/websockets";
-import { ValidationError } from "class-validator";
 
-@Catch(BadRequestException, NotFoundException, UnauthorizedException, ValidationError)
+@Catch(BadRequestException, NotFoundException, UnauthorizedException)
 export class BadRequestTransformationFilter extends BaseWsExceptionFilter {
     catch(exception: BadRequestException, host: ArgumentsHost) {
-        console.log(exception.message, exception instanceof ValidationError);
+        console.log(exception);
         const properException = new WsException(exception.getResponse());
         super.catch(properException, host);
     }

@@ -1,17 +1,9 @@
-import { Type } from "class-transformer";
-import { IsAlphanumeric, IsString, IsUppercase, Length, ValidateNested } from "class-validator";
+import { IsString, Length } from "class-validator";
 
-import { ROOM_ID_LENGTH } from "../util/constants";
-import { UserInput } from "./user.input";
+import { NAME_MAX_LENGTH, NAME_MIN_LENGTH } from "../util/constants";
 
 export class JoinRoomInput {
-    @Length(ROOM_ID_LENGTH, ROOM_ID_LENGTH)
-    @IsUppercase()
-    @IsAlphanumeric()
+    @Length(NAME_MIN_LENGTH, NAME_MAX_LENGTH)
     @IsString()
-    roomId: string;
-
-    @ValidateNested()
-    @Type(() => UserInput)
-    user: UserInput;
+    name: string;
 }

@@ -1,13 +1,15 @@
-import type { RoomDtoModel } from "../../rooms/dto/room-dto.model";
+import type { MemberRoomDtoModel } from "src/rooms/dto/member-room-dto.model";
+import type { RoomDtoModel } from "src/rooms/dto/room-dto.model";
+
 import type { UserDtoModel } from "../../rooms/dto/user-dto.model";
 
-export type RoomEvents =
+export type RoomEventPayload =
     | RoomExitedEvent
     | RoomJoinedEvent
     | RoomMembersUpdatedEvent
     | RoomUpdatedEvent;
 
-export enum EventOperation {
+export enum RoomEvent {
     RoomJoined = "room/joined",
     RoomUpdated = "room/updated",
     RoomExited = "room/exited",
@@ -21,7 +23,7 @@ export enum RoomExitedReason {
 }
 
 export interface RoomExitedEvent {
-    operation: EventOperation.RoomExited;
+    operation: RoomEvent.RoomExited;
     data: {
         reason: RoomExitedReason;
         roomId: string;
@@ -29,17 +31,17 @@ export interface RoomExitedEvent {
 }
 
 export interface RoomJoinedEvent {
-    operation: EventOperation.RoomJoined;
+    operation: RoomEvent.RoomJoined;
     data: {
         me: UserDtoModel;
         roomId: string;
-        room: RoomDtoModel;
+        room: MemberRoomDtoModel;
         members: UserDtoModel[];
     };
 }
 
 export interface RoomMembersUpdatedEvent {
-    operation: EventOperation.RoomMembersUpdated;
+    operation: RoomEvent.RoomMembersUpdated;
     data: {
         roomId: string;
         members: UserDtoModel[];
@@ -47,10 +49,8 @@ export interface RoomMembersUpdatedEvent {
 }
 
 export interface RoomUpdatedEvent {
-    operation: EventOperation.RoomUpdated;
+    operation: RoomEvent.RoomUpdated;
     data: {
-        roomId: string;
         room: RoomDtoModel;
-        members?: UserDtoModel[];
     };
 }

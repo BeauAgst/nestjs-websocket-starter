@@ -1,3 +1,4 @@
+import { UsePipes, ValidationPipe } from "@nestjs/common";
 import type { OnGatewayDisconnect } from "@nestjs/websockets";
 import {
     ConnectedSocket,
@@ -8,29 +9,19 @@ import {
 } from "@nestjs/websockets";
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
-import { UserStatus } from "src/model/enum/user-status.enum";
-import type {
-    RoomExitedEvent,
-    RoomMembersUpdatedEvent,
-    RoomUpdatedEvent,
-} from "src/model/events/room.event";
-import {
-    EventOperation,
-    type RoomEvents,
-    RoomExitedReason,
-    type RoomJoinedEvent,
-} from "src/model/events/room.event";
+import type { RoomEventPayload, RoomUpdatedEvent } from "src/model/events/room.event";
+import { RoomEvent } from "src/model/events/room.event";
+import { ConnectToRoomInput } from "src/rooms/dto/connect-to-room.input";
+import { GiveHostInput } from "src/rooms/dto/give-host.input";
 import { KickUserInput } from "src/rooms/dto/kick-user.input";
-import { UsersService } from "src/users/users.service";
+import { LeaveRoomInput } from "src/rooms/dto/leave-room.input";
+import { LockRoomInput } from "src/rooms/dto/look-room.input";
+import { MembersService } from "src/rooms/members.service";
+import { mapRoomToDto } from "src/rooms/util/map-room-to-dto";
 
-import { CreateRoomInput } from "../rooms/dto/create-room.input";
-import { JoinRoomInput } from "../rooms/dto/join-room.input";
-import { LeaveRoomInput } from "../rooms/dto/leave-room.input";
-import { PassRoomOwnershipInput } from "../rooms/dto/pass-room-ownership.input";
-import { UpdateRoomInput } from "../rooms/dto/update-room.input";
-import { RoomsService } from "../rooms/rooms.service";
-import { EventsMessages } from "./events.messages";
+import { EventsMessages } from "../model/events/events.messages";
 
+@UsePipes(new ValidationPipe())
 @WebSocketGateway({
     cors: {
         origin: "*",
@@ -43,256 +34,198 @@ export class EventsGateway implements OnGatewayDisconnect {
 
     constructor(
         private readonly logger: PinoLogger,
-        private readonly roomsService: RoomsService,
-        private readonly usersService: UsersService,
+        private readonly membersService: MembersService,
     ) {
         this.logger.setContext(this.constructor.name);
     }
 
-    private broadcast(socket: Socket, roomId: string, payload: RoomEvents) {
+    private broadcast(socket: Socket, roomId: string, payload: RoomEventPayload) {
         return socket.broadcast.to(roomId).emit("event", payload);
     }
 
-    @SubscribeMessage(EventsMessages.CreateRoom)
-    async handleCreateRoomMessage(
+    @SubscribeMessage(EventsMessages.ConnectToRoom)
+    async onJoin(
         @ConnectedSocket()
         socket: Socket,
         @MessageBody()
-        input: CreateRoomInput,
-    ): Promise<RoomJoinedEvent> {
-        const user = this.usersService.getOrCreateUser(input.user, socket.id);
-        const room = this.roomsService.createRoom(input.room, user.id);
-        const userIds = this.roomsService.getUserIdsForRoom(room.id);
-        const members = this.usersService.getUsersById(userIds);
-
-        await socket.join(room.id);
-
-        const event: RoomJoinedEvent = {
-            operation: EventOperation.RoomJoined,
-            data: {
-                me: user,
-                roomId: room.id,
-                room,
-                members,
-            },
-        };
-
-        return event;
-    }
-
-    @SubscribeMessage(EventsMessages.JoinRoom)
-    async handleJoinRoomMessage(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: JoinRoomInput,
+        input: ConnectToRoomInput,
     ) {
-        const user = this.usersService.getOrCreateUser(input.user, socket.id);
-
-        const room = this.roomsService.joinRoom(input.roomId, user.id);
-        const userIds = this.roomsService.getUserIdsForRoom(room.id);
-        const members = this.usersService.getUsersById(userIds);
-
-        const roomMembersUpdatedEvent: RoomMembersUpdatedEvent = {
-            operation: EventOperation.RoomMembersUpdated,
-            data: {
-                roomId: room.id,
-                members,
-            },
-        };
-
-        await socket.join(room.id);
-        await this.broadcast(socket, room.id, roomMembersUpdatedEvent);
-
-        const event: RoomJoinedEvent = {
-            operation: EventOperation.RoomJoined,
-            data: {
-                me: user,
-                roomId: room.id,
-                room,
-                members,
-            },
-        };
-
-        return event;
-    }
-
-    @SubscribeMessage(EventsMessages.KickUserFromRoom)
-    async handleKickUser(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: KickUserInput,
-    ) {
-        const { roomId, userId, userIdToKick } = input;
-        const room = this.roomsService.kickUserFromRoom(roomId, userId, userIdToKick);
-        const userIds = this.roomsService.getUserIdsForRoom(roomId);
-        const usersInRoom = this.usersService.getUsersById(userIds);
-
-        const kickedUser = this.usersService.getUserById(userIdToKick);
+        const room = await this.membersService.connect(socket.id, input);
 
         if (!room) {
-            const event: RoomExitedEvent = {
-                operation: EventOperation.RoomExited,
-                data: {
-                    reason: RoomExitedReason.RoomClosed,
-                    roomId,
-                },
-            };
-
-            await this.broadcast(socket, roomId, event);
-            await socket.in(roomId).socketsLeave(roomId);
-
-            return event;
+            // TODO handle failure
+            return;
         }
 
-        const roomKickedEvent: RoomExitedEvent = {
-            operation: EventOperation.RoomExited,
+        const dto = mapRoomToDto(room);
+
+        const update: RoomUpdatedEvent = {
+            operation: RoomEvent.RoomUpdated,
             data: {
-                reason: RoomExitedReason.Kicked,
-                roomId,
+                room: dto,
             },
         };
 
-        const roomUpdatedEvent: RoomUpdatedEvent = {
-            operation: EventOperation.RoomUpdated,
-            data: {
-                roomId,
-                room,
-                members: usersInRoom,
-            },
-        };
+        await socket.join(room.code);
+        await this.broadcast(socket, room.code, update);
 
-        await this.server.to(kickedUser.socketId).emit("event", roomKickedEvent);
-        await this.server.in(kickedUser.socketId).socketsLeave(roomId);
-
-        await this.broadcast(socket, room.id, roomUpdatedEvent);
-
-        return roomUpdatedEvent;
+        return update;
     }
 
     @SubscribeMessage(EventsMessages.LeaveRoom)
-    async handleLeaveRoomMessage(
+    async onLeave(
         @ConnectedSocket()
         socket: Socket,
         @MessageBody()
         input: LeaveRoomInput,
     ) {
-        const { roomId, userId } = input;
-        const room = this.roomsService.leaveRoom(roomId, userId);
-
-        const roomClosedEvent: RoomExitedEvent = {
-            operation: EventOperation.RoomExited,
-            data: {
-                reason: RoomExitedReason.RoomClosed,
-                roomId,
-            },
-        };
-        const roomLeftEvent: RoomExitedEvent = {
-            operation: EventOperation.RoomExited,
-            data: {
-                reason: RoomExitedReason.Left,
-                roomId,
-            },
-        };
+        const room = await this.membersService.leave(socket.id, input);
 
         if (!room) {
-            await this.broadcast(socket, roomId, roomClosedEvent);
-            await socket.in(roomId).socketsLeave(roomId);
-            return roomLeftEvent;
-        }
-
-        const userIds = this.roomsService.getUserIdsForRoom(roomId);
-        const usersInRoom = this.usersService.getUsersById(userIds);
-
-        const roomUpdatedEvent: RoomUpdatedEvent = {
-            operation: EventOperation.RoomUpdated,
-            data: {
-                roomId,
-                room,
-                members: usersInRoom,
-            },
-        };
-
-        await this.broadcast(socket, roomId, roomUpdatedEvent);
-        await socket.leave(room.id);
-        return roomLeftEvent;
-    }
-
-    @SubscribeMessage(EventsMessages.PassRoomOwnership)
-    async handlePassedOwnershipMessage(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: PassRoomOwnershipInput,
-    ) {
-        const room = this.roomsService.passRoomOwnership(input);
-
-        const roomUpdatedEvent: RoomUpdatedEvent = {
-            operation: EventOperation.RoomUpdated,
-            data: {
-                roomId: room.id,
-                room,
-            },
-        };
-
-        await this.broadcast(socket, room.id, roomUpdatedEvent);
-
-        return roomUpdatedEvent;
-    }
-
-    @SubscribeMessage(EventsMessages.UpdateRoom)
-    async handleLockRoomMessage(
-        @ConnectedSocket()
-        socket: Socket,
-        @MessageBody()
-        input: UpdateRoomInput,
-    ) {
-        const room = this.roomsService.updateRoom(input);
-
-        const roomUpdatedEvent: RoomUpdatedEvent = {
-            operation: EventOperation.RoomUpdated,
-            data: {
-                roomId: room.id,
-                room,
-            },
-        };
-
-        await this.broadcast(socket, room.id, roomUpdatedEvent);
-
-        return roomUpdatedEvent;
-    }
-
-    async handleDisconnect(socket: Socket) {
-        const { id: socketId } = socket;
-        this.logger.info({ socketId }, "Socket disconnected");
-        const user = this.usersService.updateUserStatusForSocketId(socketId, UserStatus.Inactive);
-
-        if (!user) {
-            this.logger.info({ socketId }, "No user found for this socket ID");
+            // TODO handle failure
             return;
         }
 
-        const rooms = this.roomsService.findRoomsForUser(user.id);
+        const update: RoomUpdatedEvent = {
+            operation: RoomEvent.RoomUpdated,
+            data: {
+                room: mapRoomToDto(room),
+            },
+        };
 
-        if (!rooms?.length) {
-            this.logger.info({ socketId }, "User was not in any rooms");
+        await this.broadcast(socket, room.code, update);
+
+        // TODO return room closed operation
+    }
+
+    @SubscribeMessage(EventsMessages.KickFromRoom)
+    async onKick(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: KickUserInput,
+    ) {
+        const room = await this.membersService.kick(socket.id, input);
+
+        if (!room) {
+            // TODO handle failure
             return;
         }
 
-        const broadcasts = rooms.map((room) => {
-            const userIds = this.roomsService.getUserIdsForRoom(room.id);
-            const usersInRoom = this.usersService.getUsersById(userIds);
-            const event: RoomMembersUpdatedEvent = {
-                operation: EventOperation.RoomMembersUpdated,
-                data: {
-                    members: usersInRoom,
-                    roomId: room.id,
-                },
-            };
-            return this.broadcast(socket, room.id, event);
-        });
+        const update: RoomUpdatedEvent = {
+            operation: RoomEvent.RoomUpdated,
+            data: {
+                room: mapRoomToDto(room),
+            },
+        };
 
-        await Promise.all(broadcasts);
+        await this.server.to(input.socketIdToKick).emit("event", "You've been kicked fam");
+        await this.server.in(input.socketIdToKick).socketsLeave(room.code);
+        await this.broadcast(socket, room.code, update);
+
+        return update;
+    }
+
+    @SubscribeMessage(EventsMessages.ReconnectToRoom)
+    async onReconnect(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        oldSocketId: string,
+    ) {
+        const room = await this.membersService.reconnect(socket.id, oldSocketId);
+
+        if (!room) {
+            // TODO handle failure
+            return;
+        }
+
+        // TODO handle user in multiple rooms
+
+        const dto = mapRoomToDto(room);
+
+        const update: RoomUpdatedEvent = {
+            operation: RoomEvent.RoomUpdated,
+            data: {
+                room: dto,
+            },
+        };
+
+        await socket.join(room.code);
+        await this.broadcast(socket, room.code, update);
+
+        return dto;
+    }
+
+    @SubscribeMessage(EventsMessages.GiveHost)
+    async onGiveHost(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: GiveHostInput,
+    ) {
+        const room = await this.membersService.giveHost(socket.id, input);
+
+        if (!room) {
+            // TODO handle failure
+            return;
+        }
+
+        const dto = mapRoomToDto(room);
+
+        const update: RoomUpdatedEvent = {
+            operation: RoomEvent.RoomUpdated,
+            data: {
+                room: dto,
+            },
+        };
+
+        await this.broadcast(socket, room.code, update);
+
+        return dto;
+    }
+
+    @SubscribeMessage(EventsMessages.LockRoom)
+    async onLock(
+        @ConnectedSocket()
+        socket: Socket,
+        @MessageBody()
+        input: LockRoomInput,
+    ) {
+        const room = await this.membersService.lockRoom(socket.id, input);
+
+        if (!room) {
+            // TODO handle failure
+            return;
+        }
+
+        const dto = mapRoomToDto(room);
+
+        const update: RoomUpdatedEvent = {
+            operation: RoomEvent.RoomUpdated,
+            data: {
+                room: dto,
+            },
+        };
+
+        await this.broadcast(socket, room.code, update);
+
+        return update;
+    }
+
+    async handleDisconnect(
+        @ConnectedSocket()
+        socket: Socket,
+    ) {
+        const room = await this.membersService.disconnect(socket.id);
+
+        if (!room) {
+            // TODO
+            // do nothing, user was not in any rooms
+            return;
+        }
+
+        // TODO
+        // do nothing, user was in rooms and successfully disconnected
     }
 }

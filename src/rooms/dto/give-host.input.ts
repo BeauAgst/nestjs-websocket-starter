@@ -2,7 +2,7 @@ import { IsAlphanumeric, IsString, IsUppercase, Length } from "class-validator";
 
 import { ROOM_CODE_LENGTH } from "../util/constants";
 
-export class KickUserInput {
+export class GiveHostInput {
     @Length(ROOM_CODE_LENGTH, ROOM_CODE_LENGTH)
     @IsUppercase()
     @IsAlphanumeric()
@@ -13,5 +13,5 @@ export class KickUserInput {
     secret: string;
 
     @IsString()
-    socketIdToKick: string;
+    socketIdToHost: string;
 }

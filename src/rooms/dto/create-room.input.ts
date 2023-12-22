@@ -1,15 +1,29 @@
-import { Type } from "class-transformer";
-import { ValidateNested } from "class-validator";
+import {
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsString,
+    IsUUID,
+    Length,
+    Max,
+    Min,
+} from "class-validator";
 
-import { RoomConfigurationInput } from "./room-configuration.input";
-import { UserInput } from "./user.input";
+import { NAME_MAX_LENGTH, NAME_MIN_LENGTH } from "../util/constants";
 
 export class CreateRoomInput {
-    @ValidateNested()
-    @Type(() => RoomConfigurationInput)
-    room: RoomConfigurationInput;
+    @IsNotEmpty()
+    @Length(NAME_MIN_LENGTH, NAME_MAX_LENGTH)
+    @IsString()
+    name: string;
 
-    @ValidateNested()
-    @Type(() => UserInput)
-    user: UserInput;
+    @IsOptional()
+    @Max(20)
+    @Min(2)
+    @IsNumber()
+    maxMembers?: number;
+
+    @IsOptional()
+    @IsUUID()
+    memberId?: string;
 }
