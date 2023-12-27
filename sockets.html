@@ -13,21 +13,7 @@
 
     const socket = io('http://localhost:3000/rooms');
 
-    const getUserData = () => {
-      const data = localStorage.getItem("user")
-
-      if (data) {
-        return JSON.parse(data)
-      }
-
-      return {}
-    }
-
-    const setUserData = (user) => localStorage.setItem("user", JSON.stringify(user))
-
     const Container = () => {
-      // setUserData({ id: "65858a54e59716ad3a827b74", name: "Beau" })
-      const userData = getUserData()
       const [inRoom, setInRoom] = useState(false)
       const [isConnected, setIsConnected] = useState(socket.connected);
       const [me, setMe] = useState({});
@@ -41,10 +27,10 @@
         onEvent = (event) => {
           const { operation, data } = event
 
-          console.log(operation, data)
+          console.log({ operation, data })
 
           switch (operation) {
-            case "room_members/updated":
+            case "room/updated":
               setRoom(data.room)
               setMembers(data.room.members)
               break;
@@ -69,13 +55,27 @@
         };
       }, []);
 
-      const onCreateRoom = ({ maxMembers, name, userId }) => {
-        const event = "room.create"
-        const room = { maxMembers: maxMembers || null }
-        const user = { id: userId, name }
-        const payload = { room, user }
+      const onCreateRoom = async ({ name }) => {
+
+        const response = await fetch("http://localhost:3000/rooms", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name })
+        })
+        const result = await response.json()
+
+        setMe(result.member)
+        setRoom(result.room)
+
+        localStorage.setItem("memberId", result.member.id)
+        localStorage.setItem("secret", result.room.secret)
+
+        const event = "room.connect"
+        const payload = { memberId: result.member.id, roomCode: result.room.code }
         console.log(`[triggered:${event}]`, payload)
-        socket.emit('room.create', payload, response => {
+        socket.emit(event, payload, response => {
           console.log(`[response:${event}]`, response);
 
           const { room } = response.data
@@ -86,16 +86,31 @@
         });
       }
 
-      const onJoinRoom = ({ memberId, roomCode }) => {
+      const onJoinRoom = async ({ name, memberId, roomCode }) => {
+        const response = await fetch(`http://localhost:3000/rooms/${roomCode}/join`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ memberId, name })
+        })
+        const result = await response.json()
+
+        setMe(result.member)
+        setRoom(result.room)
+
+        localStorage.setItem("memberId", result.member.id)
+
         const event = "room.connect"
-        console.log(`[triggered:${event}]`)
-        socket.emit(event, { memberId, roomCode }, response => {
+        const payload = { memberId: result.member.id, roomCode: result.room.code }
+        console.log(`[triggered:${event}]`, payload)
+        socket.emit(event, payload, response => {
           console.log(`[response:${event}]`, response);
 
           const { room } = response.data
 
-          setRoom(room)
           setMembers(room.members)
+          setRoom(room)
           setInRoom(true)
         });
       }
@@ -141,8 +156,8 @@
       }
 
       const onClickMakeHost = (userId) => {
-        const event = "room.pass_ownership"
-        const payload = { newHostId: userId, roomId: room.id, userId: me.id }
+        const event = "room.give_host"
+        const payload = { roomCode: room.code, secret: localStorage.getItem("secret"), socketIdToHost: userId }
 
         console.log(`[triggered:${event}]`, payload)
         socket.emit(event, payload, response => {
@@ -158,62 +173,50 @@
       return (<div>
         <h1>NestJS Websocket Starter</h1>
         <div>{isConnected ? "Connected" : "Disconnected"}</div>
-        {inRoom ? <RoomContainer me={userData} onClickKick={onClickKick} onClickLeave={onLeaveRoom} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} room={room} members={members} /> : <KickoffContainer onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />}
+        {inRoom ? <RoomContainer me={me} onClickKick={onClickKick} onClickLeave={onLeaveRoom} onClickMakeHost={onClickMakeHost} onClickToggleLock={onClickToggleLock} room={room} members={members} /> : <KickoffContainer onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />}
       </div>)
     }
 
     const KickoffContainer = ({ onCreateRoom, onJoinRoom }) => {
-      const userData = getUserData()
-      const [name, setName] = useState(userData.name ?? "")
-      const [maxMembers, setMaxUsers] = useState("")
-      const [roomCode, setRoomCode] = useState(localStorage.getItem("roomCode") || "")
+      const [name, setName] = useState(localStorage.getItem("name") ?? "")
+      const [roomCode, setRoomCode] = useState(localStorage.getItem("roomCode") ?? "")
       const isValidName = /^[a-zA-Z ]{2,}$/.test(name)
       const isValidRoomCode = /^[A-Z0-9]{4}$/.test(roomCode)
-      const isValidUsers = !maxMembers || /^\d{1,2}$/.test(maxMembers)
 
       const handleRoomCodeChange = (event) => {
         const value = event.target.value;
         setRoomCode(value.toUpperCase());
       };
 
-      const handleMaxUsersChange = (event) => {
-        const value = event.target.value;
+      const memberId = localStorage.getItem("memberId")
 
-        if (!value) {
-          setMaxUsers("")
-        }
-
-        const valueAsNumber = Number(value)
-
-        if (value.length > 1 && (valueAsNumber > 20)) return
-
-        setMaxUsers(valueAsNumber)
+      const onSetName = (event) => {
+        const name = event.target.value
+        setName(name)
+        localStorage.setItem("name", name)
       }
-
-      const memberId = userData.id ?? undefined
 
       const onClickCreateRoom = () => {
         localStorage.setItem("roomCode", roomCode)
-        onCreateRoom({ maxMembers, name, memberId })
+        onCreateRoom({ name, memberId })
       }
       const onClickJoinRoom = () => {
         localStorage.setItem("roomCode", roomCode)
-        onJoinRoom({ roomCode, memberId })
+        onJoinRoom({ name, memberId, roomCode })
       }
       const onSubmit = (e) => e.preventDefault()
 
       return (<form onSubmit={onSubmit}>
-        <input onChange={(e) => setName(e.target.value)} maxLength={20} minLength={2} placeholder="Enter your name" value={name} />
-        <input onChange={handleMaxUsersChange} pattern="^\d{1,2}$" placeholder="Maximum members" value={maxMembers} />
-        <button disabled={!isValidName || !isValidUsers} onClick={onClickCreateRoom}>Create room</button>
+        <input onChange={onSetName} maxLength={20} minLength={2} placeholder="Enter your name" value={name} />
+        <button disabled={!isValidName} onClick={onClickCreateRoom}>Create room</button>
         <input maxLength={4} minLength={4} onChange={handleRoomCodeChange} pattern="^[A-Z0-9]{4}$" placeholder="Enter a room code" value={roomCode} />
-        <button disabled={!isValidName || !isValidRoomCode || !isValidUsers} onClick={onClickJoinRoom}>Join room</button>
+        <button disabled={!isValidName || !isValidRoomCode} onClick={onClickJoinRoom}>Join room</button>
       </form>)
     }
 
     const RoomMembers = ({ hostId, me, onClickKick, onClickLeave, onClickMakeHost, members }) => {
       return (<table><tbody>{members.map((member) => (<tr key={member.socketId}>
-        <td>{member.name} ({member.status}) ({hostId === member.socketId ? "Host" : "Participant"})</td>
+        <td><span className={member.connected ? "dot connected" : "dot"}></span> {member.name} ({member.isHost ? "Host" : "Participant"})</td>
         <td><button onClick={() => onClickMakeHost(member.socketId)}>Make host</button></td>
         <td><button onClick={() => onClickKick(member.socketId)}>Kick</button></td>
         {
@@ -244,6 +247,20 @@
   <!-- These are for React -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.development.js"></script>
+
+  <style>
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: red;
+    }
+
+    .dot.connected {
+      background-color: green;
+    }
+  </style>
 </body>
 
 </html>

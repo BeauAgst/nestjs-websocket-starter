@@ -1,13 +1,4 @@
-import {
-    IsNotEmpty,
-    IsNumber,
-    IsOptional,
-    IsString,
-    IsUUID,
-    Length,
-    Max,
-    Min,
-} from "class-validator";
+import { IsNotEmpty, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
 
 import { NAME_MAX_LENGTH, NAME_MIN_LENGTH } from "../util/constants";
 
@@ -22,8 +13,4 @@ export class CreateRoomInput {
     @Min(2)
     @IsNumber()
     maxMembers?: number;
-
-    @IsOptional()
-    @IsUUID()
-    memberId?: string;
 }

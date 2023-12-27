@@ -8,6 +8,9 @@ export class MemberDtoModel {
     id: string;
 
     @Expose()
+    isHost: boolean;
+
+    @Expose()
     name: string;
 
     @Expose()

@@ -1,5 +1,5 @@
 import { Expose } from "class-transformer";
-import { RoomState } from "src/model/room-state.enum";
+import { RoomState } from "src/model/enum/room-state.enum";
 
 import type { MemberDtoModel } from "./member-dto.model";
 

@@ -16,6 +16,10 @@ import type { Room } from "./schema/room.schema";
 export class MembersService {
     constructor(@InjectModel("Room") private readonly roomModel: Model<Room>) {}
 
+    async getByCode(code: string) {
+        return await this._findOne({ code: code.toUpperCase() });
+    }
+
     async connect(socketId: string, input: ConnectToRoomInput): Promise<Room> {
         const { memberId, roomCode } = input;
         if (!socketId) throw new UserException("Missing socket ID");
@@ -61,6 +65,19 @@ export class MembersService {
     async leave(socketId: string, input: LeaveRoomInput): Promise<Room> {
         if (!socketId) throw new UserException("Invalid socket ID");
 
+        const room = await this.getByCode(input.roomCode);
+        if (!room) throw new UserException("Room not found");
+
+        const leavingMember = room.members.find((member) => member.socketId === socketId);
+        if (!leavingMember) throw new UserException("Member not found");
+
+        if (leavingMember.isHost) {
+            // TODO if `member.isHost` is true, assign `isHost` to
+            // someone else at random and `$pull` the member for
+            // the matching `socketId`
+            const nextHost = room.members.find((m) => m.socketId !== socketId);
+        }
+
         return await this._findOneRoomAndUpdate(
             { code: input.roomCode, "members.socketId": socketId },
             {
@@ -75,6 +92,10 @@ export class MembersService {
 
     async kick(socketId: string, input: KickUserInput): Promise<Room> {
         if (!socketId) throw new UserException("Invalid socket ID");
+
+        if (socketId.toLowerCase() === input.socketIdToKick.toLowerCase()) {
+            throw new UserException("Cannot kick self from room");
+        }
 
         const { roomCode, secret, socketIdToKick } = input;
 
@@ -101,6 +122,10 @@ export class MembersService {
 
     async giveHost(socketId: string, input: GiveHostInput): Promise<Room> {
         if (!socketId) throw new UserException("Invalid socket ID");
+
+        if (socketId.toLowerCase() === input.socketIdToHost.toLowerCase()) {
+            throw new UserException("Member is already host of room");
+        }
 
         const { roomCode, secret, socketIdToHost } = input;
 
@@ -144,6 +169,10 @@ export class MembersService {
             },
             [{ $set: { isLocked: { $not: "$isLocked" } } }],
         );
+    }
+
+    private _findOne(conditions: unknown) {
+        return this.roomModel.findOne(conditions).exec();
     }
 
     _findOneRoomAndUpdate(conditions, update) {

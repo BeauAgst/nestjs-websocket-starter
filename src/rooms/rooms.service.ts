@@ -4,7 +4,7 @@ import mongoose, { Model } from "mongoose";
 import { nanoid } from "nanoid";
 import { PinoLogger } from "nestjs-pino";
 import { UserException } from "src/common/user.exception";
-import { RoomState } from "src/model/room-state.enum";
+import { RoomState } from "src/model/enum/room-state.enum";
 
 import type { CreateRoomInput } from "./dto/create-room.input";
 import type { JoinRoomInput } from "./dto/join-room.input";
@@ -65,6 +65,13 @@ export class RoomsService {
         const room = await this.getByCode(code);
         if (!room) throw new UserException("Invalid room code");
 
+        if (input.memberId) {
+            const existingMember = room.members.find(
+                (member) => member._id.toHexString() === input.memberId,
+            );
+            if (existingMember) return existingMember;
+        }
+
         const member = new this.memberModel({
             connected: false,
             isHost: false,
@@ -75,6 +82,10 @@ export class RoomsService {
         await this.addMemberToRoom(room.id, member);
 
         return member;
+    }
+
+    delete(code: string) {
+        return this.roomModel.deleteOne({ code });
     }
 
     private _findOne(conditions: unknown) {

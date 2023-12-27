@@ -3,7 +3,8 @@ import type { MemberDocument } from "../schema/member.schema";
 
 export const mapMemberToDto = (member: MemberDocument): MemberDtoModel => ({
     connected: member.connected,
-    id: member.id,
+    id: member._id.toHexString(),
+    isHost: member.isHost,
     name: member.name,
     socketId: member.socketId,
 });

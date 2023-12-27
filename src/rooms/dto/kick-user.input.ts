@@ -1,4 +1,4 @@
-import { IsAlphanumeric, IsString, IsUppercase, Length } from "class-validator";
+import { IsAlphanumeric, IsString, IsUppercase, Length, MinLength } from "class-validator";
 
 import { ROOM_CODE_LENGTH } from "../util/constants";
 
@@ -9,9 +9,11 @@ export class KickUserInput {
     @IsString()
     roomCode: string;
 
+    @MinLength(1)
     @IsString()
     secret: string;
 
+    @MinLength(1)
     @IsString()
     socketIdToKick: string;
 }

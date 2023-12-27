@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import type { HydratedDocument } from "mongoose";
-import { RoomState } from "src/model/room-state.enum";
+import { RoomState } from "src/model/enum/room-state.enum";
 
 import type { MemberDocument } from "./member.schema";
 

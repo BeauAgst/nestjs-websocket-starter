@@ -13,7 +13,6 @@ import {
 import { CreateRoomInput } from "./dto/create-room.input";
 import { JoinRoomInput } from "./dto/join-room.input";
 import type { JoinedRoomDtoModel } from "./dto/joined-room-dto.model";
-import type { RoomDtoModel } from "./dto/room-dto.model";
 import { RoomsService } from "./rooms.service";
 import { mapMemberToDto } from "./util/map-member-to-dto";
 import { mapRoomToDto } from "./util/map-room-to-dto";
@@ -24,9 +23,12 @@ export class RoomsController {
 
     @HttpCode(201)
     @Post()
-    async create(@Body() body: CreateRoomInput): Promise<RoomDtoModel> {
+    async create(@Body() body: CreateRoomInput): Promise<JoinedRoomDtoModel> {
         const room = await this.roomsService.create(body);
-        return mapRoomToDto(room);
+        return {
+            member: mapMemberToDto(room.members[0]),
+            room: mapRoomToDto(room, true),
+        };
     }
 
     @HttpCode(200)
@@ -38,12 +40,12 @@ export class RoomsController {
         const member = await this.roomsService.join(code, body);
         if (!member) throw new NotFoundException("Room not found");
 
-        const room = await this.roomsService.getByMemberId(member.id);
+        const room = await this.roomsService.getByMemberId(member._id.toHexString());
         if (!room) throw new NotFoundException("Room not found");
 
         return {
             member: mapMemberToDto(member),
-            room: mapRoomToDto(room),
+            room: mapRoomToDto(room, member.isHost),
         };
     }
 
@@ -53,7 +55,7 @@ export class RoomsController {
         const room = await this.roomsService.getByCode(code);
         if (!room) throw new NotFoundException("Room not found");
 
-        return mapRoomToDto(room);
+        return mapRoomToDto(room, false);
     }
 
     @HttpCode(200)

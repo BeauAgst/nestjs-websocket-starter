@@ -40,6 +40,7 @@ $ yarn run test:cov
 
 ## TODO
 
+-   Merge room service and member service
 -   Clean up emitted data. All data should emit an action with a key that describes the data. ie. `"type": "user_update"`
 -   Ensure consistent data format between event data responses
 -   Look at migrating users and rooms to redis or mongo. May need to look at TTLs on data to clear out that which isn't updated. Trigger document updates every X when a user is still connected to server?
