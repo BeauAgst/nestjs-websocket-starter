@@ -6,5 +6,4 @@ export const mapMemberToDto = (member: MemberDocument): MemberDtoModel => ({
     id: member._id.toHexString(),
     isHost: member.isHost,
     name: member.name,
-    socketId: member.socketId,
 });

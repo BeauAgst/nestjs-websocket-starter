@@ -1,7 +1,6 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 
-import { MembersService } from "./members.service";
 import { RoomsController } from "./rooms.controller";
 import { RoomsService } from "./rooms.service";
 import { Member, MemberSchema } from "./schema/member.schema";
@@ -15,7 +14,7 @@ import { Room, RoomSchema } from "./schema/room.schema";
         ]),
     ],
     controllers: [RoomsController],
-    exports: [MembersService, RoomsService],
-    providers: [MembersService, RoomsService],
+    exports: [RoomsService],
+    providers: [RoomsService],
 })
 export class RoomsModule {}

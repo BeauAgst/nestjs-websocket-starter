@@ -2,7 +2,11 @@ import { IsAlphanumeric, IsString, IsUppercase, Length, MinLength } from "class-
 
 import { ROOM_CODE_LENGTH } from "../util/constants";
 
-export class GiveHostInput {
+export class UpdateHostInput {
+    @MinLength(1)
+    @IsString()
+    memberId: string;
+
     @Length(ROOM_CODE_LENGTH, ROOM_CODE_LENGTH)
     @IsUppercase()
     @IsAlphanumeric()
@@ -12,8 +16,4 @@ export class GiveHostInput {
     @MinLength(1)
     @IsString()
     secret: string;
-
-    @MinLength(1)
-    @IsString()
-    socketIdToHost: string;
 }

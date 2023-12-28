@@ -12,7 +12,4 @@ export class MemberDtoModel {
 
     @Expose()
     name: string;
-
-    @Expose()
-    socketId: string;
 }

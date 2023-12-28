@@ -128,9 +128,9 @@
         })
       }
 
-      const onClickKick = (userId) => {
+      const onClickKick = ({ memberId }) => {
         const event = "room.kick_user"
-        const payload = { roomCode: room.code, secret: localStorage.getItem("secret"), socketIdToKick: userId }
+        const payload = { roomCode: room.code, secret: localStorage.getItem("secret"), memberId }
         console.log(`[triggered:${event}]`, payload)
         socket.emit(event, payload, response => {
           console.log(`[response:${event}]`, response);
@@ -155,9 +155,9 @@
         });
       }
 
-      const onClickMakeHost = (userId) => {
-        const event = "room.give_host"
-        const payload = { roomCode: room.code, secret: localStorage.getItem("secret"), socketIdToHost: userId }
+      const onClickMakeHost = ({ memberId }) => {
+        const event = "room.update_host"
+        const payload = { memberId, roomCode: room.code, secret: localStorage.getItem("secret") }
 
         console.log(`[triggered:${event}]`, payload)
         socket.emit(event, payload, response => {
@@ -215,10 +215,10 @@
     }
 
     const RoomMembers = ({ hostId, me, onClickKick, onClickLeave, onClickMakeHost, members }) => {
-      return (<table><tbody>{members.map((member) => (<tr key={member.socketId}>
+      return (<table><tbody>{members.map((member) => (<tr key={member.id}>
         <td><span className={member.connected ? "dot connected" : "dot"}></span> {member.name} ({member.isHost ? "Host" : "Participant"})</td>
-        <td><button onClick={() => onClickMakeHost(member.socketId)}>Make host</button></td>
-        <td><button onClick={() => onClickKick(member.socketId)}>Kick</button></td>
+        <td><button onClick={() => onClickMakeHost({ memberId: member.id })}>Make host</button></td>
+        <td><button onClick={() => onClickKick({ memberId: member.id })}>Kick</button></td>
         {
           member.id === me.id &&
           <>
