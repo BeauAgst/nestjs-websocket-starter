@@ -9,7 +9,13 @@ import {
 } from "@nestjs/websockets";
 import { PinoLogger } from "nestjs-pino";
 import { Server, Socket } from "socket.io";
-import type { GatewayEvent, RoomExitedEvent, RoomUpdatedEvent } from "src/model/events/room.event";
+import { UserException } from "src/common/user.exception";
+import type {
+    GatewayEvent,
+    RoomExitedEvent,
+    RoomHostChangeEvent,
+    RoomUpdatedEvent,
+} from "src/model/events/room.event";
 import { RoomEvent, RoomExitReason } from "src/model/events/room.event";
 import { ConnectToRoomInput } from "src/rooms/dto/connect-to-room.input";
 import { UpdateHostInput } from "src/rooms/dto/give-host.input";
@@ -40,11 +46,6 @@ export class EventsGateway implements OnGatewayDisconnect {
         this.logger.setContext(this.constructor.name);
     }
 
-    private hasHostChanged(socketId: string, room: Room) {
-        const host = room.members.find(({ isHost }) => isHost);
-        return host?.socketId !== socketId;
-    }
-
     private userIsHost(socketId: string, room: Room) {
         if (!socketId) return false;
         return room.members.find((member) => member.socketId === socketId)?.isHost;
@@ -64,28 +65,35 @@ export class EventsGateway implements OnGatewayDisconnect {
         socket: Socket,
         @MessageBody()
         input: ConnectToRoomInput,
-    ) {
-        const room = await this.roomsService.connect(socket.id, input);
+    ): Promise<GatewayEvent> {
+        const result = await this.roomsService.connect(socket.id, input);
 
-        if (!room) {
-            // TODO handle failure
-            return;
+        if (!result) {
+            const message = "Could not connect member to room";
+            throw new UserException(message);
         }
 
-        const dto = mapRoomToDto(room, this.userIsHost(socket.id, room));
+        const { me, room } = result;
 
-        const update: RoomUpdatedEvent = {
+        await socket.join(room.code);
+
+        await this.sendToRoom(socket, room.code, {
             opCode: RoomEvent.Updated,
             roomCode: room.code,
             data: {
-                room: dto,
+                room: mapRoomToDto(room),
+            },
+        });
+
+        const event: RoomUpdatedEvent = {
+            opCode: RoomEvent.Updated,
+            roomCode: room.code,
+            data: {
+                room: mapRoomToDto(room, me.isHost),
             },
         };
 
-        await socket.join(room.code);
-        await this.sendToRoom(socket, room.code, update);
-
-        return update;
+        return event;
     }
 
     @SubscribeMessage(EventsMessages.LeaveRoom)
@@ -94,11 +102,11 @@ export class EventsGateway implements OnGatewayDisconnect {
         socket: Socket,
         @MessageBody()
         input: LeaveRoomInput,
-    ) {
+    ): Promise<GatewayEvent> {
         const { roomCode } = input;
-        const room = await this.roomsService.leave(socket.id, input);
+        const result = await this.roomsService.leave(socket.id, input);
 
-        const event: RoomExitedEvent = {
+        const exitEvent: RoomExitedEvent = {
             opCode: RoomEvent.Exited,
             roomCode,
             data: {
@@ -106,27 +114,39 @@ export class EventsGateway implements OnGatewayDisconnect {
             },
         };
 
-        if (!room) {
-            // TODO
-            // Room has been deleted
+        if (!result) {
+            this.logger.info({ roomCode }, "socket was last member of room, removing all sockets");
+            await this.sendToRoom(socket, roomCode, exitEvent);
             await this.server.in(roomCode).socketsLeave(roomCode);
-            return event;
+            return exitEvent;
         }
 
-        const update: RoomUpdatedEvent = {
+        const { host, room } = result;
+
+        const updateEvent: RoomUpdatedEvent = {
             opCode: RoomEvent.Updated,
-            roomCode: room.code,
+            roomCode,
             data: {
-                room: mapRoomToDto(room, false),
+                room: mapRoomToDto(room),
             },
         };
 
-        if (this.hasHostChanged(socket.id, room)) {
+        if (host.socketId !== socket.id) {
+            const hostChangeEvent: RoomHostChangeEvent = {
+                opCode: RoomEvent.HostChange,
+                roomCode,
+                data: {
+                    secret: result.room.secret,
+                },
+            };
+
+            await this.sendToRoomMember(host.socketId, hostChangeEvent);
         }
 
-        await this.sendToRoom(socket, room.code, update);
+        await socket.leave(roomCode);
+        await this.sendToRoom(socket, result.room.code, updateEvent);
 
-        return event;
+        return exitEvent;
     }
 
     @SubscribeMessage(EventsMessages.KickFromRoom)
@@ -135,13 +155,15 @@ export class EventsGateway implements OnGatewayDisconnect {
         socket: Socket,
         @MessageBody()
         input: KickUserInput,
-    ) {
-        const { member, room } = await this.roomsService.kick(socket.id, input);
+    ): Promise<GatewayEvent> {
+        const result = await this.roomsService.kick(socket.id, input);
 
-        if (!room) {
-            // TODO handle failure
+        if (!result) {
+            // TODO handle failure (input did not match room reqs)
             return;
         }
+
+        const { member, room } = result;
 
         const update: RoomUpdatedEvent = {
             opCode: RoomEvent.Updated,
@@ -160,7 +182,6 @@ export class EventsGateway implements OnGatewayDisconnect {
         });
 
         await this.server.in(member.socketId).socketsLeave(room.code);
-
         await this.sendToRoom(socket, room.code, update);
 
         return update;
@@ -172,30 +193,36 @@ export class EventsGateway implements OnGatewayDisconnect {
         socket: Socket,
         @MessageBody()
         oldSocketId: string,
-    ) {
-        const room = await this.roomsService.reconnect(socket.id, oldSocketId);
+    ): Promise<GatewayEvent> {
+        const result = await this.roomsService.reconnect(socket.id, oldSocketId);
 
-        if (!room) {
+        if (!result) {
             // TODO handle failure
             return;
         }
 
-        // TODO handle user in multiple rooms
+        const { host, room } = result;
 
-        const dto = mapRoomToDto(room, this.userIsHost(socket.id, room));
-
-        const update: RoomUpdatedEvent = {
+        const roomEvent: RoomUpdatedEvent = {
             opCode: RoomEvent.Updated,
             roomCode: room.code,
             data: {
-                room: dto,
+                room: mapRoomToDto(room),
             },
         };
 
         await socket.join(room.code);
-        await this.sendToRoom(socket, room.code, update);
+        await this.sendToRoom(socket, room.code, roomEvent);
 
-        return dto;
+        const userEvent: RoomUpdatedEvent = {
+            opCode: RoomEvent.Updated,
+            roomCode: room.code,
+            data: {
+                room: mapRoomToDto(room, host.socketId === socket.id),
+            },
+        };
+
+        return userEvent;
     }
 
     @SubscribeMessage(EventsMessages.UpdateHost)
@@ -204,27 +231,34 @@ export class EventsGateway implements OnGatewayDisconnect {
         socket: Socket,
         @MessageBody()
         input: UpdateHostInput,
-    ) {
-        const room = await this.roomsService.updateHost(socket.id, input);
+    ): Promise<GatewayEvent> {
+        const result = await this.roomsService.updateHost(socket.id, input);
 
-        if (!room) {
+        if (!result) {
             // TODO handle failure
             return;
         }
 
-        const dto = mapRoomToDto(room);
+        const { host, room } = result;
 
-        const update: RoomUpdatedEvent = {
+        const updateEvent: RoomUpdatedEvent = {
             opCode: RoomEvent.Updated,
             roomCode: room.code,
             data: {
-                room: dto,
+                room: mapRoomToDto(room),
             },
         };
 
-        await this.sendToRoom(socket, room.code, update);
+        await this.sendToRoomMember(host.socketId, {
+            opCode: RoomEvent.HostChange,
+            roomCode: room.code,
+            data: {
+                secret: room.secret,
+            },
+        });
+        await this.sendToRoom(socket, room.code, updateEvent);
 
-        return dto;
+        return updateEvent;
     }
 
     @SubscribeMessage(EventsMessages.LockRoom)
@@ -233,49 +267,57 @@ export class EventsGateway implements OnGatewayDisconnect {
         socket: Socket,
         @MessageBody()
         input: LockRoomInput,
-    ) {
-        const room = await this.roomsService.lock(socket.id, input);
+    ): Promise<GatewayEvent> {
+        const result = await this.roomsService.lock(socket.id, input);
 
-        if (!room) {
+        if (!result) {
             // TODO handle failure
             return;
         }
 
-        const dto = mapRoomToDto(room, this.userIsHost(socket.id, room));
+        const { room } = result;
 
-        const update: RoomUpdatedEvent = {
+        const event: RoomUpdatedEvent = {
             opCode: RoomEvent.Updated,
             roomCode: room.code,
             data: {
-                room: dto,
+                room: mapRoomToDto(room),
             },
         };
 
-        await this.sendToRoom(socket, room.code, update);
+        await this.sendToRoom(socket, room.code, event);
 
-        return update;
+        return event;
     }
 
     async handleDisconnect(
         @ConnectedSocket()
         socket: Socket,
-    ) {
-        const room = await this.roomsService.disconnect(socket.id);
+    ): Promise<GatewayEvent> {
+        const result = await this.roomsService.disconnect(socket.id);
 
-        if (!room) {
+        if (!result) {
             // TODO
             // do nothing, user was not in any rooms
             return;
         }
 
-        const update: RoomUpdatedEvent = {
+        const { room } = result;
+
+        await this.sendToRoom(socket, room.code, {
             opCode: RoomEvent.Updated,
             roomCode: room.code,
             data: {
-                room: mapRoomToDto(room, this.userIsHost(socket.id, room)),
+                room: mapRoomToDto(room),
+            },
+        });
+
+        return {
+            opCode: RoomEvent.Exited,
+            roomCode: room.code,
+            data: {
+                reason: RoomExitReason.Disconnected,
             },
         };
-
-        await this.sendToRoom(socket, room.code, update);
     }
 }

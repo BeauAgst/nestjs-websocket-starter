@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { PinoLogger } from "nestjs-pino";
 import { UserException } from "src/common/user.exception";
 import { RoomState } from "src/model/enum/room-state.enum";
+import type { RoomDataModel } from "src/model/room-data.model";
 
 import type { ConnectToRoomInput } from "./dto/connect-to-room.input";
 import type { CreateRoomInput } from "./dto/create-room.input";
@@ -17,6 +18,7 @@ import type { MemberDocument } from "./schema/member.schema";
 import { Member } from "./schema/member.schema";
 import { Room } from "./schema/room.schema";
 import { generateRoomCode } from "./util/generate-room-code";
+import { mapRoomToRoomData } from "./util/map-room-to-room-data";
 
 @Injectable()
 export class RoomsService {
@@ -28,21 +30,16 @@ export class RoomsService {
         this.logger.setContext(this.constructor.name);
     }
 
+    private getRoomHost(room: Room) {
+        return room.members.find(({ isHost }) => isHost);
+    }
+
     async getByCode(code: string) {
         return await this._findOne({ code: code.toUpperCase() });
     }
 
     async getByMemberId(memberId: string): Promise<Room> {
         return await this._findOne({ "members._id": new mongoose.Types.ObjectId(memberId) });
-    }
-
-    private async addMemberToRoom(id: string, member: Member) {
-        return await this._findOneAndUpdate(
-            { _id: id },
-            {
-                $push: { members: member },
-            },
-        );
     }
 
     async create(input: CreateRoomInput): Promise<Room> {
@@ -85,7 +82,12 @@ export class RoomsService {
             socketId: undefined,
         });
 
-        await this.addMemberToRoom(room.id, member);
+        await this._findOneAndUpdate(
+            { _id: room.id },
+            {
+                $push: { members: member },
+            },
+        );
 
         return member;
     }
@@ -94,10 +96,10 @@ export class RoomsService {
         return this.roomModel.deleteOne({ code });
     }
 
-    async connect(socketId: string, input: ConnectToRoomInput): Promise<Room> {
+    async connect(socketId: string, input: ConnectToRoomInput): Promise<RoomDataModel> {
         const { memberId, roomCode } = input;
 
-        return await this._findOneAndUpdate(
+        const result = await this._findOneAndUpdate(
             { code: roomCode, "members._id": new mongoose.Types.ObjectId(memberId) },
             {
                 $set: {
@@ -106,22 +108,23 @@ export class RoomsService {
                 },
             },
         );
+
+        return mapRoomToRoomData(result, socketId);
     }
 
-    async disconnect(socketId: string): Promise<Room> {
+    async disconnect(socketId: string): Promise<RoomDataModel> {
         if (!socketId) throw new UserException("Invalid socket ID");
 
-        return await this._findOneAndUpdate(
+        const result = await this._findOneAndUpdate(
             { "members.socketId": socketId },
             { $set: { "members.$.connected": false } },
         );
+
+        return mapRoomToRoomData(result, socketId);
     }
 
-    async reconnect(newSocketId: string, oldSocketId: string): Promise<Room> {
-        if (!oldSocketId) throw new UserException("Invalid old socket ID");
-        if (!newSocketId) throw new UserException("Invalid new socket ID");
-
-        return await this._findOneAndUpdate(
+    async reconnect(newSocketId: string, oldSocketId: string): Promise<RoomDataModel> {
+        const result = await this._findOneAndUpdate(
             {
                 "members.socketId": oldSocketId,
             },
@@ -132,9 +135,11 @@ export class RoomsService {
                 },
             },
         );
+
+        return mapRoomToRoomData(result, newSocketId);
     }
 
-    async leave(socketId: string, input: LeaveRoomInput): Promise<Room> {
+    async leave(socketId: string, input: LeaveRoomInput): Promise<RoomDataModel> {
         const room = await this.getByCode(input.roomCode);
         if (!room) throw new UserException("Room not found");
 
@@ -142,9 +147,6 @@ export class RoomsService {
         if (!leavingMember) throw new UserException("Member not found");
 
         if (leavingMember.isHost) {
-            // TODO if `member.isHost` is true, assign `isHost` to
-            // someone else at random and `$pull` the member for
-            // the matching `socketId`
             const nextHost = room.members.find((m) => m.socketId !== socketId);
 
             if (!nextHost) {
@@ -152,17 +154,20 @@ export class RoomsService {
                 return null;
             }
 
-            await this._findOneAndUpdate(
+            const result = await this._findOneAndUpdate(
                 { code: input.roomCode, "members.socketId": nextHost.socketId },
                 {
                     $set: {
                         "members.$.isHost": true,
+                        secret: nanoid(),
                     },
                 },
             );
+
+            return mapRoomToRoomData(result, socketId);
         }
 
-        return await this._findOneAndUpdate(
+        const result = await this._findOneAndUpdate(
             { code: input.roomCode },
             {
                 $pull: {
@@ -172,15 +177,23 @@ export class RoomsService {
                 },
             },
         );
+
+        return mapRoomToRoomData(result, socketId);
     }
 
-    async kick(socketId: string, input: KickUserInput): Promise<{ member: Member; room: Room }> {
+    async kick(socketId: string, input: KickUserInput): Promise<RoomDataModel> {
         const { memberId, roomCode, secret } = input;
 
         const room = await this.getByCode(roomCode);
 
         if (!room) {
-            // TODO handle failure
+            throw new UserException("Room does not exist");
+        }
+
+        const host = this.getRoomHost(room);
+
+        if (host.socketId !== socketId) {
+            throw new UserException("Member is not host of room");
         }
 
         const member = room.members.find((member) => member._id.toHexString() === memberId);
@@ -193,7 +206,7 @@ export class RoomsService {
             throw new UserException("Cannot kick self from room");
         }
 
-        const updated = await this._findOneAndUpdate(
+        const result = await this._findOneAndUpdate(
             {
                 code: roomCode,
                 secret,
@@ -213,19 +226,22 @@ export class RoomsService {
             },
         );
 
-        return {
-            member,
-            room: updated,
-        };
+        return mapRoomToRoomData(result, socketId, member);
     }
 
-    async updateHost(socketId: string, input: UpdateHostInput): Promise<Room> {
+    async updateHost(socketId: string, input: UpdateHostInput): Promise<RoomDataModel> {
         const { memberId, roomCode, secret } = input;
 
         const room = await this.getByCode(roomCode);
 
         if (!room) {
-            // TODO handle failure
+            throw new UserException("Room does not exist");
+        }
+
+        const host = this.getRoomHost(room);
+
+        if (host.socketId !== socketId) {
+            throw new UserException("Member is not host of room");
         }
 
         const member = room.members.find((member) => member._id.toHexString() === memberId);
@@ -238,7 +254,7 @@ export class RoomsService {
             throw new UserException("Member is already host of room");
         }
 
-        return await this._findOneAndUpdate(
+        const result = await this._findOneAndUpdate(
             {
                 code: roomCode,
                 members: {
@@ -264,12 +280,14 @@ export class RoomsService {
                 ],
             },
         );
+
+        return mapRoomToRoomData(result, socketId);
     }
 
-    async lock(socketId: string, input: LockRoomInput) {
+    async lock(socketId: string, input: LockRoomInput): Promise<RoomDataModel> {
         const { roomCode, secret } = input;
 
-        return await this._findOneAndUpdate(
+        const result = await this._findOneAndUpdate(
             {
                 code: roomCode,
                 members: {
@@ -282,6 +300,8 @@ export class RoomsService {
             },
             [{ $set: { isLocked: { $not: "$isLocked" } } }],
         );
+
+        return mapRoomToRoomData(result, socketId);
     }
 
     private _findOne(conditions: unknown) {

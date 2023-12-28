@@ -27,18 +27,21 @@
         onEvent = (event) => {
           const { opCode, data } = event
 
-          console.log({ opCode, data })
+          console.log(event, { opCode, data })
 
           switch (opCode) {
-            case "room/updated":
-              setRoom(data.room)
-              setMembers(data.room.members)
-              break;
             case "room/exited":
               setInRoom(false)
               setRoom({})
               setMembers([])
               alert(`You have left the room. Reason: ${data.reason}`)
+              break;
+            case "room/host_change":
+              localStorage.setItem("secret", data.secret)
+              break;
+            case "room/updated":
+              setRoom(data.room)
+              setMembers(data.room.members)
               break;
           }
         }
@@ -104,6 +107,7 @@
 
         localStorage.setItem("memberId", result.member.id)
         localStorage.setItem("roomCode", result.room.code)
+        localStorage.setItem("secret", result.room.secret)
 
         const event = "room.connect"
         const payload = { memberId: result.member.id, roomCode: result.room.code }
@@ -169,7 +173,7 @@
 
           const { data } = response
 
-          console.log(data)
+          console.log(response, data)
 
           setRoom(data.room)
         });
@@ -220,7 +224,7 @@
 
     const RoomMembers = ({ hostId, me, onClickKick, onClickLeave, onClickMakeHost, members }) => {
       return (<table><tbody>{members.map((member) => (<tr key={member.id}>
-        <td><span className={member.connected ? "dot connected" : "dot"}></span> {member.name} ({member.isHost ? "Host" : "Participant"})</td>
+        <td><span className={member.connected ? "dot connected" : "dot"}></span> <span className={member.id === me.id ? "bold" : ""}>{member.name}</span> ({member.isHost ? "Host" : "Participant"})</td>
         <td><button onClick={() => onClickMakeHost({ memberId: member.id })}>Make host</button></td>
         <td><button onClick={() => onClickKick({ memberId: member.id })}>Kick</button></td>
         {
@@ -263,6 +267,10 @@
 
     .dot.connected {
       background-color: green;
+    }
+
+    .bold {
+      font-weight: bold;
     }
   </style>
 </body>

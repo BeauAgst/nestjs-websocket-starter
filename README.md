@@ -40,9 +40,7 @@ $ yarn run test:cov
 
 ## TODO
 
--   Clean up emitted data. All data should emit an action with a key that describes the data. ie. `"type": "user_update"`
--   room updates should be different to host updates (secret should not be emitted to all, but host should be known)
--   Ensure consistent data format between event data responses
 -   Look at migrating users and rooms to redis
 -   Look at TTLs on data to clear out that which isn't updated. Trigger document updates every X when a user is still connected to server?
 -   Write tests
+-   secret needs to be updated every time host re-connects

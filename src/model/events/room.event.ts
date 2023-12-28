@@ -1,6 +1,6 @@
 import type { RoomDtoModel } from "src/rooms/dto/room-dto.model";
 
-export type GatewayEvent = RoomExitedEvent | RoomUpdatedEvent;
+export type GatewayEvent = RoomExitedEvent | RoomHostChangeEvent | RoomUpdatedEvent;
 
 export enum RoomEvent {
     HostChange = "room/host_change",
@@ -10,6 +10,7 @@ export enum RoomEvent {
 }
 
 export enum RoomExitReason {
+    Disconnected = "disconnected",
     Kicked = "kicked",
     Left = "left",
 }
@@ -32,4 +33,7 @@ export interface RoomExitedEvent {
 export interface RoomHostChangeEvent {
     opCode: RoomEvent.HostChange;
     roomCode: string;
+    data: {
+        secret?: string;
+    };
 }
