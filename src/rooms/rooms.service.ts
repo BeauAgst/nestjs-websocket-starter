@@ -68,7 +68,8 @@ export class RoomsService {
 
     async join(code: string, input: JoinRoomInput): Promise<MemberDocument> {
         const room = await this.getByCode(code);
-        if (!room) throw new UserException("Invalid room code");
+
+        if (!room) return null;
 
         if (input.memberId) {
             const existingMember = room.members.find(

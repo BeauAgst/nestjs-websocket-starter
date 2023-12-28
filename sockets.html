@@ -25,11 +25,11 @@
         onConnect = () => setIsConnected(true);
         onDisconnect = () => setIsConnected(false);
         onEvent = (event) => {
-          const { operation, data } = event
+          const { opCode, data } = event
 
-          console.log({ operation, data })
+          console.log({ opCode, data })
 
-          switch (operation) {
+          switch (opCode) {
             case "room/updated":
               setRoom(data.room)
               setMembers(data.room.members)
@@ -70,6 +70,7 @@
         setRoom(result.room)
 
         localStorage.setItem("memberId", result.member.id)
+        localStorage.setItem("roomCode", result.room.code)
         localStorage.setItem("secret", result.room.secret)
 
         const event = "room.connect"
@@ -96,10 +97,13 @@
         })
         const result = await response.json()
 
+        console.log(result)
+
         setMe(result.member)
         setRoom(result.room)
 
         localStorage.setItem("memberId", result.member.id)
+        localStorage.setItem("roomCode", result.room.code)
 
         const event = "room.connect"
         const payload = { memberId: result.member.id, roomCode: result.room.code }
@@ -165,6 +169,8 @@
 
           const { data } = response
 
+          console.log(data)
+
           setRoom(data.room)
         });
       }
@@ -197,11 +203,9 @@
       }
 
       const onClickCreateRoom = () => {
-        localStorage.setItem("roomCode", roomCode)
         onCreateRoom({ name, memberId })
       }
       const onClickJoinRoom = () => {
-        localStorage.setItem("roomCode", roomCode)
         onJoinRoom({ name, memberId, roomCode })
       }
       const onSubmit = (e) => e.preventDefault()

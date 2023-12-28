@@ -3,10 +3,10 @@ import type { RoomDtoModel } from "src/rooms/dto/room-dto.model";
 export type GatewayEvent = RoomExitedEvent | RoomUpdatedEvent;
 
 export enum RoomEvent {
-    RoomJoined = "room/joined",
-    RoomUpdated = "room/updated",
-    RoomExited = "room/exited",
-    RoomMembersUpdated = "room_members/updated",
+    HostChange = "room/host_change",
+    Joined = "room/joined",
+    Updated = "room/updated",
+    Exited = "room/exited",
 }
 
 export enum RoomExitReason {
@@ -15,14 +15,21 @@ export enum RoomExitReason {
 }
 
 export interface RoomUpdatedEvent {
-    operation: RoomEvent.RoomUpdated;
+    opCode: RoomEvent.Updated;
+    roomCode: string;
     data: {
         room: RoomDtoModel;
     };
 }
 export interface RoomExitedEvent {
-    operation: RoomEvent.RoomExited;
+    opCode: RoomEvent.Exited;
+    roomCode: string;
     data: {
         reason: RoomExitReason;
     };
+}
+
+export interface RoomHostChangeEvent {
+    opCode: RoomEvent.HostChange;
+    roomCode: string;
 }
