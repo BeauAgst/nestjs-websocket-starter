@@ -1,10 +1,9 @@
-import { IsAlphanumeric, IsString, IsUppercase, Length, MinLength } from "class-validator";
+import { IsAlphanumeric, IsMongoId, IsString, IsUppercase, Length } from "class-validator";
 
 import { ROOM_CODE_LENGTH } from "../util/constants";
 
 export class ConnectToRoomInput {
-    @MinLength(1)
-    @IsString()
+    @IsMongoId()
     memberId: string;
 
     @Length(ROOM_CODE_LENGTH, ROOM_CODE_LENGTH)

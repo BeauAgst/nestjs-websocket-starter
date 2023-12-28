@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length, MinLength } from "class-validator";
+import { IsMongoId, IsOptional, IsString, Length } from "class-validator";
 
 import { NAME_MAX_LENGTH, NAME_MIN_LENGTH } from "../util/constants";
 
@@ -8,7 +8,6 @@ export class JoinRoomInput {
     name: string;
 
     @IsOptional()
-    @MinLength(1)
-    @IsString()
+    @IsMongoId()
     memberId?: string;
 }

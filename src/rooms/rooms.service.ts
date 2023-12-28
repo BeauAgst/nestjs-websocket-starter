@@ -97,8 +97,6 @@ export class RoomsService {
     async connect(socketId: string, input: ConnectToRoomInput): Promise<Room> {
         const { memberId, roomCode } = input;
 
-        if (!mongoose.Types.ObjectId.isValid(memberId)) throw new UserException("Invalid memberId");
-
         return await this._findOneAndUpdate(
             { code: roomCode, "members._id": new mongoose.Types.ObjectId(memberId) },
             {
@@ -179,8 +177,6 @@ export class RoomsService {
     async kick(socketId: string, input: KickUserInput): Promise<{ member: Member; room: Room }> {
         const { memberId, roomCode, secret } = input;
 
-        if (!mongoose.Types.ObjectId.isValid(memberId)) throw new UserException("Invalid memberId");
-
         const room = await this.getByCode(roomCode);
 
         if (!room) {
@@ -225,8 +221,6 @@ export class RoomsService {
 
     async updateHost(socketId: string, input: UpdateHostInput): Promise<Room> {
         const { memberId, roomCode, secret } = input;
-
-        if (!mongoose.Types.ObjectId.isValid(memberId)) throw new UserException("Invalid memberId");
 
         const room = await this.getByCode(roomCode);
 
