@@ -144,7 +144,7 @@ export class EventsGateway implements OnGatewayDisconnect {
         }
 
         await socket.leave(roomCode);
-        await this.sendToRoom(socket, result.room.code, updateEvent);
+        await this.sendToRoom(socket, room.code, updateEvent);
 
         return exitEvent;
     }

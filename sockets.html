@@ -173,9 +173,8 @@
 
           const { data } = response
 
-          console.log(response, data)
-
           setRoom(data.room)
+          setMembers(data.room.members)
         });
       }
 

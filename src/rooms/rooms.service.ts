@@ -154,7 +154,7 @@ export class RoomsService {
                 return null;
             }
 
-            const result = await this._findOneAndUpdate(
+            await this._findOneAndUpdate(
                 { code: input.roomCode, "members.socketId": nextHost.socketId },
                 {
                     $set: {
@@ -163,8 +163,6 @@ export class RoomsService {
                     },
                 },
             );
-
-            return mapRoomToRoomData(result, socketId);
         }
 
         const result = await this._findOneAndUpdate(
